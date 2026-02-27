@@ -1,0 +1,19 @@
+{
+  "name": "planetkit-ai-agent-render-service",
+  "version": "1.0.0",
+  "description": "Windows VM service for AI Agent (Puppeteer + Chrome)",
+  "main": "server-windows.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server-windows.js",
+    "dev": "node --watch server-windows.js"
+  },
+  "keywords": ["puppeteer", "ai-agent", "planetkit", "gemini"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "puppeteer": "^23.0.0"
+  }
+}

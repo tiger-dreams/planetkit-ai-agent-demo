@@ -1,0 +1,33 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0066FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00C6FF;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg-gradient)"/>
+
+  <!-- Video camera icon -->
+  <g transform="translate(600, 200)">
+    <rect x="-80" y="-50" width="130" height="100" rx="10" fill="white" opacity="0.9"/>
+    <path d="M 50 -30 L 100 -50 L 100 30 L 50 50 Z" fill="white" opacity="0.9"/>
+  </g>
+
+  <!-- Title -->
+  <text x="600" y="380" font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle">
+    🎥 Video Call
+  </text>
+
+  <!-- Subtitle -->
+  <text x="600" y="450" font-family="Arial, sans-serif" font-size="36" fill="white" text-anchor="middle" opacity="0.9">
+    Join the conference room
+  </text>
+
+  <!-- Powered by -->
+  <text x="600" y="550" font-family="Arial, sans-serif" font-size="24" fill="white" text-anchor="middle" opacity="0.7">
+    Powered by LINE PlanetKit
+  </text>
+</svg>

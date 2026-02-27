@@ -1,0 +1,175 @@
+@startuml
+title AI Agent Bridge - Windows VM Architecture\n(Normal Group Call + AI Agent Invite)
+
+top to bottom direction
+
+skinparam componentStyle rectangle
+skinparam packageStyle frame
+skinparam noteBackgroundColor #FFFDE7
+skinparam noteBorderColor #F9A825
+skinparam ArrowColor #444444
+skinparam defaultFontSize 12
+skinparam packageBorderThickness 1.5
+skinparam componentBorderThickness 1
+
+' ══════════════════════════════════════════
+' LAYER 1: CLIENT BROWSER
+' ══════════════════════════════════════════
+package "Client Browser  (LINE LIFF / Mobile)" as ClientBrowser {
+  package "PlanetKitMeetingArea  (React Component)" as MeetingArea {
+    component [Conference Object\n─────────────────\nUser's WebRTC connection] as PKUser
+    component [AI Agent\nInvite Button] as BotBtn
+    component [Listen / Respond\nMode Toggle] as ModeBtn
+  }
+}
+
+' ══════════════════════════════════════════
+' LAYER 2: WINDOWS AZURE VM
+' ══════════════════════════════════════════
+package "Windows Azure VM  (Always-on / PM2)" as WinVM {
+
+  component [server-windows.js\nExpress REST API  :3000] as WinServer
+
+  ' Hidden anchor for top-left positioning
+  circle " " as WinVM_Anchor
+  WinVM_Anchor -[hidden]- WinServer
+
+  package "Chrome  (headless:false, off-screen  -2000,0)" as ChromePkg {
+    package "HeadlessAgentPage  (React)" as AgentPage {
+      component [Conference Object\n─────────────────\nAI Agent WebRTC connection] as PKAgent
+      component [AIAgentService\n─────────────────\nmode: respond | listen\naudio output gate] as AgentSvc
+      component [AudioWorklet\nPCM16 encoder  16kHz] as AW
+      component [AudioContext +\nMediaStreamDestination] as ACMSD
+    }
+  }
+}
+
+' ══════════════════════════════════════════
+' LAYER 3: EXTERNAL SERVICES
+' ══════════════════════════════════════════
+cloud "LINE Planet" as LinePlanet {
+  component [Planet Media Server\nWebRTC Relay] as PlanetServer
+}
+
+cloud "Google AI" as GoogleAI {
+  component [Gemini 2.5\nMultimodal Live API] as GeminiAPI
+}
+
+' ══════════════════════════════════════════
+' MAIN FLOW
+' ══════════════════════════════════════════
+
+BotBtn -down-> WinServer
+note on link
+  ① POST /join-as-agent
+  { roomId, userId: AI_HEADLESS_xxx,
+    language, voice }
+end note
+
+WinServer -down-> PKAgent
+note on link
+  ② puppeteer.launch(headless:false)
+     navigate → /headless-agent?roomId=...
+     wait for window.agentConnected = true
+end note
+
+WinServer <.up. BotBtn
+note on link
+  ⑤ { success: true }
+  → UI: "AI Agent Active"
+end note
+
+PKAgent .up.> WinServer
+note on link
+  ④ window.agentConnected = true
+end note
+
+' ══════════════════════════════════════════
+' MODE CONTROL FLOW
+' ══════════════════════════════════════════
+
+ModeBtn -down-> WinServer
+note on link
+  ⑦ POST /agent-mode
+  { roomId, mode: "listen" | "respond" }
+end note
+
+WinServer -down-> AgentSvc
+note on link
+  ⑧ page.evaluate(setAgentMode)
+  → aiAgentService.setMode(mode)
+end note
+
+AgentSvc -right-> GeminiAPI
+note on link
+  ⑨ clientContent: mode instruction
+  listen → "Do NOT speak"
+  respond → "Wait until addressed"
+end note
+
+' ══════════════════════════════════════════
+' WEBRTC CONNECTIONS
+' ══════════════════════════════════════════
+
+PKUser -down-> PlanetServer
+note on link
+  ③-A  WebRTC connection established
+  (User participant)
+end note
+
+PKAgent <-down-> PlanetServer
+note on link
+  ③-B  Bidirectional WebRTC connection
+  (AI Agent participant)
+  ⑤ After setup, used as audio channel
+end note
+
+' ══════════════════════════════════════════
+' AUDIO PIPELINE
+' ══════════════════════════════════════════
+
+PKAgent -right-> AW : captureStream()\n(capture room audio received)
+
+AW -right-> GeminiAPI
+note on link
+  ⑥-A  Room audio -> Gemini
+  PCM16, 16kHz via WebSocket
+end note
+
+GeminiAPI -down-> AgentSvc
+note on link
+  ⑥-B  AI voice -> Float32Array
+  (listen mode: blocked by gate)
+end note
+
+AgentSvc -down-> ACMSD : passes only in respond mode
+
+ACMSD -left-> PKAgent : setCustomMediaStream()\n(broadcast AI voice to entire room)
+
+' ══════════════════════════════════════════
+' LEFT-TOP NOTE
+' ══════════════════════════════════════════
+
+note left of WinVM_Anchor
+  Key fix vs Render.com (Linux headless):
+  headless: false  ->  Web Audio API works properly
+  Off-screen positioning processes audio without UI
+
+  Listen / Respond mode (Dual Safety Net):
+  * Gemini instruction: mode switch via clientContent
+  * Audio output gate: blocks voice output in listen mode
+  * Audio input: continues in listen mode (context retention)
+  * Only the inviter can toggle (isAIAgentInviter)
+
+  Session lifecycle:
+  * 5-min timeout -> AI farewell -> browser.close()
+  * Room empty -> auto-leave after 30s
+  * POST /disconnect-agent -> force disconnect (kick)
+
+  Note on Kick implementation:
+  PlanetKit Server API kickout does not support
+  WebPlanetKit (Web SDK).
+  -> browser.close() is the only method.
+end note
+
+@enduml

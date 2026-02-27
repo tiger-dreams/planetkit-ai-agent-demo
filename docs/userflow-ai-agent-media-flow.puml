@@ -1,0 +1,98 @@
+@startuml
+title AI Agent Bridge - Media Flow (Sequence Diagram)\nWindows VM Architecture
+
+actor "Host (User)" as Host
+participant "PlanetKitMeetingArea\n(User's Browser)" as UI
+participant "Windows Azure VM\n(server-windows.js)" as WinVM
+participant "HeadlessAgentPage\n(Chrome on VM)" as Bridge
+participant "AudioWorklet\n(PCM Processor)" as Worklet
+participant "Gemini AI\n(Google)" as Gemini
+participant "Planet Server\n(Conference)" as Planet
+actor "Other Participants" as Others
+
+== Initialization ==
+Host -> UI: Click AI Agent Invite Button
+UI -> WinVM: POST /join-as-agent\n{ roomId, language, voice }
+WinVM -> Bridge: puppeteer.launch(headless:false)\nnavigate /headless-agent?roomId=...
+Bridge -> Planet: joinConference()\nas AI_HEADLESS_{roomId}
+Bridge -> Gemini: WebSocket Connect (v1beta)
+Bridge -> WinVM: window.agentConnected = true
+WinVM -> UI: { success: true }
+UI -> Host: "AI Agent Active" (button dimmed)
+
+== Path 1: Room Audio → AI (Capturing) ==
+Host -> Planet: Microphone Input (WebRTC)
+Planet -> Bridge: Room Audio Stream\n(PlanetKit captureStream)
+Bridge -> Worklet: Process Audio (16kHz PCM16)
+Worklet -> Gemini: WebSocket: realtimeInput (Chunks)
+Gemini -> Gemini: Multimodal Inference
+
+== Path 2: AI → Conference (Broadcasting) ==
+Gemini -> Bridge: WebSocket: serverContent (Audio Data\nFloat32Array)
+Bridge -> Bridge: Web Audio API\n(AudioContext 24kHz)
+Bridge -> Bridge: Connect to\nMediaStreamDestination
+Bridge -> Planet: setCustomMediaStream(aiStream)
+Planet -> Others: Broadcast AI Voice (WebRTC)
+Planet -> Host: AI Voice (WebRTC)
+
+== Mode Switching (Listen / Respond) ==
+
+note over Host, Gemini
+  Dual Safety Net: Gemini text instruction + audio output gate
+  Audio input continues even in Listen mode (to maintain context)
+  Only the inviter (Host) can toggle modes
+end note
+
+Host -> UI: Toggle → Listen Mode
+UI -> WinVM: POST /agent-mode\n{ roomId, mode: "listen" }
+WinVM -> Bridge: page.evaluate(setAgentMode("listen"))
+Bridge -> Bridge: aiAgentService.setMode("listen")\n→ audio output gate ON
+Bridge -> Gemini: clientContent:\n"You are now in LISTEN-ONLY mode.\nDo NOT speak or generate audio."
+WinVM -> UI: { success: true, mode: "listen" }
+UI -> Host: Badge: "Listen Mode"
+
+... time passes (AI silently absorbs conversation) ...
+
+Host -> Planet: Speaking (WebRTC)
+Planet -> Bridge: Room Audio Stream
+Bridge -> Worklet: Process Audio (continues)
+Worklet -> Gemini: realtimeInput (continues)\n<- continues for context retention
+Gemini -> Bridge: Audio response (if any)
+Bridge -> Bridge: X gate blocked (listen mode)\n-> no audio output
+
+...
+
+Host -> UI: Toggle → Respond Mode
+UI -> WinVM: POST /agent-mode\n{ roomId, mode: "respond" }
+WinVM -> Bridge: page.evaluate(setAgentMode("respond"))
+Bridge -> Bridge: aiAgentService.setMode("respond")\n→ audio output gate OFF
+Bridge -> Gemini: clientContent:\n"Wait until addressed.\nDo NOT summarize what you heard."
+WinVM -> UI: { success: true, mode: "respond" }
+UI -> Host: Badge: "Respond Mode"
+
+Host -> Planet: "Haemil, summarize what we discussed"
+Planet -> Bridge: Room Audio
+Bridge -> Worklet: Process Audio
+Worklet -> Gemini: realtimeInput
+Gemini -> Bridge: AI Response (with full context)
+Bridge -> Planet: setCustomMediaStream()\n-> broadcast AI response to entire room
+Planet -> Host: AI Voice
+Planet -> Others: AI Voice
+
+== Session End ==
+alt 5-min timeout
+  Bridge -> Gemini: Farewell message
+  Gemini -> Bridge: AI farewell audio
+  Bridge -> Planet: Broadcast farewell
+  Bridge -> WinVM: Session cleanup
+  WinVM -> WinVM: browser.close()
+else Room becomes empty (30s)
+  Bridge -> Planet: leaveConference()
+  WinVM -> WinVM: browser.close()
+else Host clicks Kick button
+  UI -> WinVM: POST /disconnect-agent\n{ roomId }
+  WinVM -> WinVM: browser.close()
+  WinVM -> UI: { success: true }
+end
+
+@enduml
