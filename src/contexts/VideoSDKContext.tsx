@@ -127,18 +127,23 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
           cleanedUserId = ''; // Reset to empty, will be set from LINE profile
         }
 
-        // 환경 변수에서 로드한 값과 병합 (환경 변수 우선, custom credentials가 없는 경우만)
+        // 환경 변수가 항상 우선 (serviceId, apiKey, apiSecret)
+        // localStorage에서는 userId, displayName만 복원
+        const envServiceId = import.meta.env.VITE_PLANETKIT_EVAL_SERVICE_ID || '';
+        const envApiKey = import.meta.env.VITE_PLANETKIT_EVAL_API_KEY || '';
+        const envApiSecret = import.meta.env.VITE_PLANETKIT_EVAL_API_SECRET || '';
+
         setPlanetKitConfig(prev => ({
           ...prev,
-          // Service ID, API Key, API Secret은 환경 변수 우선 (custom credentials가 비활성화된 경우만)
-          serviceId: prev.serviceId || saved.serviceId,
-          apiKey: prev.apiKey || saved.apiKey,
-          apiSecret: prev.apiSecret || saved.apiSecret,
+          // 환경 변수가 있으면 환경 변수 사용, 없으면 localStorage 값 사용
+          serviceId: envServiceId || saved.serviceId || prev.serviceId,
+          apiKey: envApiKey || saved.apiKey || prev.apiKey,
+          apiSecret: envApiSecret || saved.apiSecret || prev.apiSecret,
           // userId: cleaned value only, LINE profile will override
           userId: cleanedUserId || prev.userId,
           displayName: saved.displayName || prev.displayName,
-          // environment는 custom credentials가 활성화되지 않은 경우 빈 값으로 시작
-          environment: prev.environment || '',
+          // environment는 eval로 고정
+          environment: 'eval',
           roomId: prev.roomId || '',
           // accessToken은 복원하지 않음 (매번 새로 생성 필요)
           accessToken: ''

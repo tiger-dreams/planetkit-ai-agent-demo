@@ -4,10 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Activity, LogIn, User, Video, Server, Hash, Settings, Globe, Copy, CheckCircle, XCircle } from "lucide-react";
+import { Activity, LogIn, User, Video, Settings, Globe, Copy, Check, RefreshCw } from "lucide-react";
 import { useVideoSDK } from "@/contexts/VideoSDKContext";
 import { useLiff } from "@/contexts/LiffContext";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +14,19 @@ import { getTranslations } from "@/utils/translations";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { ProfileDialog } from "@/components/ProfileDialog";
 import { ConfigurationSection } from "@/components/ConfigurationSection";
+
+// Generate random room ID in Google Meet style (xxx-yyyy-zzz)
+const generateRoomId = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz';
+  const getRandomChars = (length: number) => {
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+  return `${getRandomChars(3)}-${getRandomChars(4)}-${getRandomChars(3)}`;
+};
 
 const SetupPage = () => {
   const navigate = useNavigate();
@@ -28,10 +38,12 @@ const SetupPage = () => {
   const { planetKitConfig, setPlanetKitConfig, isConfigured } = useVideoSDK();
   const [liffIdInput, setLiffIdInput] = useState('');
   const [customRoomId, setCustomRoomId] = useState('');
-  const [selectedRoomType, setSelectedRoomType] = useState<string>(''); // 'japan', 'korea', 'taiwan', 'thailand', 'custom', 'ai-agent-room', or ''
-  const [selectedAiVoice, setSelectedAiVoice] = useState<string>('Kore'); // AI voice for agent bridge
-  const [profileDialogOpen, setProfileDialogOpen] = useState(false); // 프로필 다이얼로그 상태
-  const autoTokenGeneratedRef = useRef(false); // 토큰 자동 생성 중복 방지
+  const [isCustomMode, setIsCustomMode] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const autoTokenGeneratedRef = useRef(false);
+  const roomInitializedRef = useRef(false);
   const [debugInfo, setDebugInfo] = useState<{
     roomParam: string | null;
     isLoggedIn: boolean;
@@ -43,18 +55,14 @@ const SetupPage = () => {
     apiKey: boolean;
     userId: string;
     status: string;
-  } | null>(null); // 디버그 정보 표시
+  } | null>(null);
 
-  // Initialize selectedRoomType based on current config
-  const presetRooms = ['japan', 'korea', 'taiwan', 'thailand'];
+  // Initialize with random room ID on mount
   useEffect(() => {
-    if (planetKitConfig.roomId) {
-      if (presetRooms.includes(planetKitConfig.roomId)) {
-        setSelectedRoomType(planetKitConfig.roomId);
-      } else {
-        setSelectedRoomType('custom');
-        setCustomRoomId(planetKitConfig.roomId);
-      }
+    if (!roomInitializedRef.current && !searchParams.get('room')) {
+      const newRoomId = generateRoomId();
+      setPlanetKitConfig(prev => ({ ...prev, roomId: newRoomId, accessToken: '' }));
+      roomInitializedRef.current = true;
     }
   }, []);
 
@@ -223,125 +231,79 @@ const SetupPage = () => {
     }
   }, [isLoggedIn, profile, planetKitConfig.roomId, planetKitConfig.accessToken, planetKitConfig.serviceId, planetKitConfig.apiKey, planetKitConfig.userId, searchParams, navigate, toast, language]);
 
-  const handleGenerateToken = async () => {
-    // Environment is now always 'eval' (set automatically in useEffect)
-    // No need to check for environment selection
-
+  // Handle Join Meeting with auto token generation
+  const handleJoinMeeting = async () => {
     if (!planetKitConfig.roomId) {
       toast({
-        title: language === 'ko' ? "Room 선택 필요" : "Room Required",
-        description: language === 'ko' ? "참여할 Room을 선택해주세요." : "Please select a room to join.",
+        title: "Room Required",
+        description: "Please enter a room ID to join.",
         variant: "destructive",
       });
       return;
     }
 
     if (!planetKitConfig.serviceId || !planetKitConfig.apiKey || !planetKitConfig.userId) {
-      const missing = [];
-      if (!planetKitConfig.serviceId) missing.push('Service ID');
-      if (!planetKitConfig.apiKey) missing.push('API Key');
-      if (!planetKitConfig.userId) missing.push('User ID');
-
       toast({
-        title: language === 'ko' ? "설정 누락" : "Configuration Missing",
-        description: language === 'ko' ? `다음 항목이 누락되었습니다: ${missing.join(', ')}` : `Missing items: ${missing.join(', ')}`,
+        title: "Configuration Missing",
+        description: "Please ensure all settings are configured.",
         variant: "destructive",
       });
       return;
     }
 
+    setIsJoining(true);
+
     try {
-      const token = await generatePlanetKitToken(
-        planetKitConfig.serviceId,
-        planetKitConfig.apiKey,
-        planetKitConfig.userId,
-        planetKitConfig.roomId,
-        3600,
-        planetKitConfig.apiSecret
-      );
+      // Auto-generate token if not already generated
+      if (!planetKitConfig.accessToken) {
+        const token = await generatePlanetKitToken(
+          planetKitConfig.serviceId,
+          planetKitConfig.apiKey,
+          planetKitConfig.userId,
+          planetKitConfig.roomId,
+          3600,
+          planetKitConfig.apiSecret
+        );
 
-      setPlanetKitConfig(prev => ({
-        ...prev,
-        accessToken: token
-      }));
+        setPlanetKitConfig(prev => ({
+          ...prev,
+          accessToken: token
+        }));
+      }
 
-      toast({
-        title: t.tokenGeneratedSuccess,
-        description: language === 'ko' ? "이제 화상회의에 참여할 수 있습니다." : "You can now join the meeting.",
-      });
+      // Navigate to meeting
+      navigate('/planetkit_meeting');
     } catch (error) {
       toast({
-        title: t.tokenGenerationFailed,
-        description: error instanceof Error ? error.message : (language === 'ko' ? "토큰 생성 중 오류가 발생했습니다." : "An error occurred while generating the token."),
+        title: "Failed to Join",
+        description: error instanceof Error ? error.message : "An error occurred while joining the meeting.",
         variant: "destructive",
       });
+      setIsJoining(false);
     }
   };
 
-  const handleJoinMeeting = async () => {
-    if (!isConfigured) return;
+  // Generate new random room ID
+  const handleGenerateNewRoom = () => {
+    const newRoomId = generateRoomId();
+    setPlanetKitConfig(prev => ({ ...prev, roomId: newRoomId, accessToken: '' }));
+    setIsCustomMode(false);
+    toast({
+      title: "New Room Created",
+      description: `Room ID: ${newRoomId}`,
+    });
+  };
 
-    // AI Agent mode: Call Render Service first, then join meeting
-    if (selectedRoomType === 'ai-agent-room') {
-      const renderServiceUrl = import.meta.env.VITE_RENDER_SERVICE_URL;
-
-      if (!renderServiceUrl) {
-        toast({
-          title: language === 'ko' ? '설정 오류' : 'Configuration Error',
-          description: 'VITE_RENDER_SERVICE_URL not configured',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      try {
-        toast({
-          title: language === 'ko' ? 'AI Agent 호출 중...' : 'Calling AI Agent...',
-          description: language === 'ko' ? 'Headless AI를 회의실에 참여시키는 중입니다...' : 'Joining Headless AI to the room...',
-        });
-
-        const response = await fetch(`${renderServiceUrl}/join-as-agent`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            roomId: 'ai-agent-bridge',
-            userId: `AI_HEADLESS_${'ai-agent-bridge'.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase().substring(0, 20)}`,
-            language: language,
-            voice: selectedAiVoice,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to call Render Service');
-        }
-
-        toast({
-          title: language === 'ko' ? '✅ AI Agent 참여 완료' : '✅ AI Agent Joined',
-          description: language === 'ko'
-            ? '회의실로 입장합니다...'
-            : 'Entering the meeting room...',
-        });
-
-        // Wait a moment for AI to fully connect, then join meeting
-        setTimeout(() => {
-          navigate('/planetkit_meeting');
-        }, 1500);
-
-      } catch (error: any) {
-        console.error('[SetupPage] Failed to call Render Service:', error);
-        toast({
-          title: language === 'ko' ? 'AI Agent 호출 실패' : 'AI Agent Call Failed',
-          description: error.message || 'Failed to call Headless AI Agent',
-          variant: 'destructive',
-        });
-      }
-    } else {
-      // Regular mode: Join meeting directly
-      navigate('/planetkit_meeting');
+  // Copy room ID to clipboard
+  const handleCopyRoomId = async () => {
+    if (planetKitConfig.roomId) {
+      await navigator.clipboard.writeText(planetKitConfig.roomId);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+      toast({
+        title: "Copied",
+        description: "Room ID copied to clipboard",
+      });
     }
   };
 
@@ -466,15 +428,15 @@ Status: ${debugInfo.status}`;
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle className="text-destructive">{language === 'ko' ? '초기화 실패' : 'Initialization Failed'}</CardTitle>
+            <CardTitle className="text-destructive">Initialization Failed</CardTitle>
             <CardDescription>{liffError}</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              {language === 'ko' ? 'LIFF 초기화에 실패했습니다. .env 파일에 VITE_LIFF_ID가 올바르게 설정되어 있는지 확인해주세요.' : 'Failed to initialize LIFF. Please check if VITE_LIFF_ID is correctly set in the .env file.'}
+              Failed to initialize LIFF. Please check if VITE_LIFF_ID is correctly set in the .env file.
             </p>
             <Button onClick={() => window.location.reload()} className="w-full">
-              {language === 'ko' ? '다시 시도' : 'Retry'}
+              Retry
             </Button>
           </CardContent>
         </Card>
@@ -711,243 +673,117 @@ Status: ${debugInfo.status}`;
           {/* Configuration Section (Environment + Custom Credentials 통합) */}
           <ConfigurationSection language={language} />
 
-          {/* Room 선택 */}
+          {/* Room ID */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Globe className="w-4 h-4" />
-                {t.room}
+                Room
               </CardTitle>
               <CardDescription className="text-xs">
-                {t.roomDescription}
+                Share this Room ID with others to join the same call
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {/* 중요 안내: 커스텀 룸 사용 권장 */}
-              <div className="p-4 bg-amber-50 dark:bg-amber-950 rounded-lg border-2 border-amber-300 dark:border-amber-700">
-                <div className="flex items-start gap-3">
-                  <div className="text-2xl">⚠️</div>
-                  <div className="flex-1 space-y-2">
-                    <p className="font-semibold text-amber-900 dark:text-amber-100">
-                      {language === 'ko'
-                        ? '프라이빗 통화를 위해 커스텀 룸을 사용하세요!'
-                        : 'Use Custom Room for Private Calls!'}
-                    </p>
-                    <p className="text-sm text-amber-800 dark:text-amber-200">
-                      {language === 'ko'
-                        ? '🇯🇵 Japan, 🇰🇷 Korea, 🇹🇼 Taiwan, 🇹🇭 Thailand 룸은 데모용 공개 룸입니다. 다른 사용자가 이미 참여 중일 수 있습니다. 프라이빗 통화를 원하시면 아래 "✏️ Custom" 옵션을 선택하여 고유한 룸 이름을 입력해주세요.'
-                        : '🇯🇵 Japan, 🇰🇷 Korea, 🇹🇼 Taiwan, 🇹🇭 Thailand rooms are public demo rooms. Other users may already be present. For private calls, please select "✏️ Custom" option below and enter your own unique room name.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <RadioGroup
-                value={selectedRoomType}
-                onValueChange={(value) => {
-                  setSelectedRoomType(value);
-                  if (value === 'custom') {
-                    // Custom room selected - use existing customRoomId or empty string
-                    setPlanetKitConfig(prev => ({ ...prev, roomId: customRoomId, accessToken: '' }));
-                  } else {
-                    // Preset room selected - use preset value directly
-                    setPlanetKitConfig(prev => ({ ...prev, roomId: value, accessToken: '' }));
-                  }
-                }}
-                className="grid grid-cols-2 gap-3"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="japan" id="room-japan" />
-                  <Label htmlFor="room-japan" className="flex-1 cursor-pointer">
-                    <div className="flex flex-col">
-                      <span className="font-medium">🇯🇵 {t.roomJapan}</span>
-                      <span className="text-xs text-muted-foreground">{language === 'ko' ? '일본 룸' : 'Japan Room'}</span>
+            <CardContent className="space-y-4">
+              {/* Current Room ID Display */}
+              {!isCustomMode ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 p-4 bg-primary/5 rounded-lg border-2 border-primary/20">
+                    <div className="flex-1">
+                      <Label className="text-xs text-muted-foreground">Your Room ID</Label>
+                      <p className="text-2xl font-mono font-bold tracking-wider text-primary">
+                        {planetKitConfig.roomId || '---'}
+                      </p>
                     </div>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="korea" id="room-korea" />
-                  <Label htmlFor="room-korea" className="flex-1 cursor-pointer">
-                    <div className="flex flex-col">
-                      <span className="font-medium">🇰🇷 {t.roomKorea}</span>
-                      <span className="text-xs text-muted-foreground">{language === 'ko' ? '한국 룸' : 'Korea Room'}</span>
-                    </div>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="taiwan" id="room-taiwan" />
-                  <Label htmlFor="room-taiwan" className="flex-1 cursor-pointer">
-                    <div className="flex flex-col">
-                      <span className="font-medium">🇹🇼 {t.roomTaiwan}</span>
-                      <span className="text-xs text-muted-foreground">{language === 'ko' ? '대만 룸' : 'Taiwan Room'}</span>
-                    </div>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="thailand" id="room-thailand" />
-                  <Label htmlFor="room-thailand" className="flex-1 cursor-pointer">
-                    <div className="flex flex-col">
-                      <span className="font-medium">🇹🇭 {t.roomThailand}</span>
-                      <span className="text-xs text-muted-foreground">{language === 'ko' ? '태국 룸' : 'Thailand Room'}</span>
-                    </div>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="custom" id="room-custom" />
-                  <Label htmlFor="room-custom" className="flex-1 cursor-pointer">
-                    <div className="flex flex-col">
-                      <span className="font-medium">✏️ {t.roomCustom}</span>
-                      <span className="text-xs text-muted-foreground">{language === 'ko' ? '커스텀 룸 입력' : 'Custom Room Input'}</span>
-                    </div>
-                  </Label>
-                </div>
-              </RadioGroup>
-
-              {/* Custom Room ID Input */}
-              {(selectedRoomType === 'custom') && (
-                <div className="space-y-2 pt-1">
-                  <Label htmlFor="custom-room-id" className="text-sm">
-                    {language === 'ko' ? '커스텀 룸 ID' : 'Custom Room ID'}
-                  </Label>
-                  <Input
-                    id="custom-room-id"
-                    value={customRoomId}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setCustomRoomId(value);
-                      setPlanetKitConfig(prev => ({ ...prev, roomId: value, accessToken: '' }));
-                    }}
-                    placeholder={t.roomCustomPlaceholder}
-                    className="font-mono"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {language === 'ko' ? '원하는 룸 ID를 입력하세요. 같은 룸 ID를 입력한 사용자들과 통화할 수 있습니다.' : 'Enter your desired room ID. You can communicate with users who enter the same room ID.'}
-                  </p>
-                </div>
-              )}
-              {/* AI Agent Voice Selector - shown only when AI Agent mode is selected */}
-              {selectedRoomType === 'ai-agent-room' && (
-                <div className="space-y-2 pt-1">
-                  <Label className="text-sm">
-                    {language === 'ko' ? '🎙️ AI 목소리 선택' : '🎙️ AI Voice'}
-                  </Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { value: 'Kore', label: language === 'ko' ? '코레 (여성)' : 'Kore (Female)', emoji: '👩' },
-                      { value: 'Aoede', label: language === 'ko' ? '아오에데 (여성)' : 'Aoede (Female)', emoji: '👩' },
-                      { value: 'Leda', label: language === 'ko' ? '레다 (여성)' : 'Leda (Female)', emoji: '👩' },
-                      { value: 'Zephyr', label: language === 'ko' ? '제피르 (여성)' : 'Zephyr (Female)', emoji: '👩' },
-                      { value: 'Puck', label: language === 'ko' ? '퍽 (남성)' : 'Puck (Male)', emoji: '👨' },
-                      { value: 'Charon', label: language === 'ko' ? '카론 (남성)' : 'Charon (Male)', emoji: '👨' },
-                    ].map((v) => (
-                      <button
-                        key={v.value}
-                        type="button"
-                        onClick={() => setSelectedAiVoice(v.value)}
-                        className={`flex items-center gap-2 p-2 rounded-md border text-sm transition-colors ${
-                          selectedAiVoice === v.value
-                            ? 'border-primary bg-primary/10 text-primary font-medium'
-                            : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                        }`}
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyRoomId}
+                        className="h-9 px-3"
                       >
-                        <span>{v.emoji}</span>
-                        <span className="text-xs">{v.label}</span>
-                      </button>
-                    ))}
+                        {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGenerateNewRoom}
+                        className="h-9 px-3"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {language === 'ko'
-                      ? `선택된 목소리: ${selectedAiVoice} | 일반 참가자는 Room ID "ai-agent-bridge" 입력으로 참여 가능`
-                      : `Selected: ${selectedAiVoice} | Regular participants join with Room ID "ai-agent-bridge"`}
-                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsCustomMode(true)}
+                    className="w-full text-muted-foreground"
+                  >
+                    Or enter a custom Room ID
+                  </Button>
                 </div>
-              )}
-              {!planetKitConfig.roomId && (
-                <div className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950 p-2 rounded border border-amber-200 dark:border-amber-800">
-                  <p className="text-amber-800 dark:text-amber-200">
-                    {t.pleaseSelectRoom}
-                  </p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="custom-room-id" className="text-sm">
+                      Custom Room ID
+                    </Label>
+                    <Input
+                      id="custom-room-id"
+                      value={customRoomId}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setCustomRoomId(value);
+                        setPlanetKitConfig(prev => ({ ...prev, roomId: value, accessToken: '' }));
+                      }}
+                      placeholder="e.g., my-meeting-room"
+                      className="font-mono text-lg"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Enter a room ID to join an existing call or create a new one
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsCustomMode(false);
+                      handleGenerateNewRoom();
+                    }}
+                    className="w-full text-muted-foreground"
+                  >
+                    Generate random Room ID instead
+                  </Button>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* 설정 요약 */}
-          <Card className="bg-muted/30">
-            <CardHeader>
-              <CardTitle className="text-sm">{t.currentConfig}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{t.environment}:</span>
-                  <span className="font-mono font-semibold">
-                    {planetKitConfig.environment === 'real' ? 'Real' : 'Evaluation'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{t.room}:</span>
-                  <span className="font-mono font-semibold">
-                    {planetKitConfig.roomId ? planetKitConfig.roomId.charAt(0).toUpperCase() + planetKitConfig.roomId.slice(1) : (language === 'ko' ? '미선택' : 'Not selected')}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Service ID:</span>
-                  <span className="font-mono text-xs">{planetKitConfig.serviceId ? (language === 'ko' ? '설정됨' : 'Set') : (language === 'ko' ? '미설정' : 'Not set')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">User ID:</span>
-                  <span className="font-mono text-xs">{planetKitConfig.userId ? (language === 'ko' ? '설정됨' : 'Set') : (language === 'ko' ? '미설정' : 'Not set')}</span>
-                </div>
-                <div className="flex justify-between col-span-2">
-                  <span className="text-muted-foreground">{t.displayName}:</span>
-                  <span className="font-mono font-semibold truncate ml-2">
-                    {planetKitConfig.displayName || (language === 'ko' ? '미설정' : 'Not set')}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 토큰 생성 */}
-          {!planetKitConfig.accessToken ? (
-            <Button
-              onClick={handleGenerateToken}
-              className="w-full h-12 text-base"
-              size="lg"
-            >
-              {t.generateToken}
-            </Button>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
-                <span className="text-sm text-green-800 dark:text-green-200">✓ {t.tokenGenerated}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPlanetKitConfig(prev => ({ ...prev, accessToken: '' }))}
-                >
-                  {language === 'ko' ? '재생성' : 'Regenerate'}
-                </Button>
-              </div>
-
-              {/* 참여 버튼 */}
-              <Button
-                onClick={handleJoinMeeting}
-                disabled={!isConfigured}
-                className="w-full h-14 text-lg bg-primary hover:bg-primary/90"
-                size="lg"
-              >
+          {/* Join Meeting Button */}
+          <Button
+            onClick={handleJoinMeeting}
+            disabled={!planetKitConfig.roomId || isJoining}
+            className="w-full h-14 text-lg bg-primary hover:bg-primary/90"
+            size="lg"
+          >
+            {isJoining ? (
+              <>
+                <Activity className="w-5 h-5 mr-2 animate-spin" />
+                Joining...
+              </>
+            ) : (
+              <>
                 <Video className="w-5 h-5 mr-2" />
-                {t.joinMeeting}
-              </Button>
-            </div>
-          )}
+                Join Meeting
+              </>
+            )}
+          </Button>
 
-          {/* 안내 메시지 */}
+          {/* Info */}
           <div className="text-center text-xs text-muted-foreground">
             <p>
-              {t.appDescription}
+              PlanetKit AI Agent Demo - LINE Video Conferencing with AI
             </p>
           </div>
         </div>

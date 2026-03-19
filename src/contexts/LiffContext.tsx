@@ -39,7 +39,7 @@ export const LiffProvider = ({ children }: LiffProviderProps) => {
   // LIFF 초기화 함수 (외부에서도 호출 가능)
   const initializeLiff = async (id: string) => {
     if (!id) {
-      setError('LIFF ID가 필요합니다.');
+      setError('LIFF ID is required.');
       return;
     }
 
@@ -70,7 +70,7 @@ export const LiffProvider = ({ children }: LiffProviderProps) => {
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'LIFF 초기화 실패');
+      setError(err instanceof Error ? err.message : 'LIFF initialization failed');
       setIsInitialized(true);
     }
   };
