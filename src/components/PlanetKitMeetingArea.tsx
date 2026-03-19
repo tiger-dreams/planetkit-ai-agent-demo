@@ -316,67 +316,17 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
                 console.warn('[PlanetKit] Could not get local video stream:', mediaError);
               }
 
-              // 로컬 참가자 초기화
-              const localParticipant = {
+              // 로컬 참가자만 초기화 (기존 참여자는 evtPeerListUpdated에서 처리)
+              setParticipants([{
                 id: config.userId,
                 name: config.displayName || config.userId,
                 isVideoOn: true,
                 isAudioOn: true,
                 videoElement: localVideoRef.current || undefined,
                 isLocal: true
-              };
+              }]);
 
-              // 기존 참여자 목록 가져오기 (나중에 조인한 경우)
-              const existingPeers: any[] = [];
-              if (planetKitConference && typeof planetKitConference.getPeerList === 'function') {
-                try {
-                  const peerList = planetKitConference.getPeerList();
-                  console.log('[PlanetKit] Existing peers on connect:', peerList);
-
-                  if (peerList && peerList.length > 0) {
-                    peerList.forEach((peer: any) => {
-                      const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
-                      const peerName = peer.displayName || peer.peerDisplayName || peer.name || peer.peerName || peer.userId || 'Unknown';
-
-                      // 비디오 엘리먼트 생성 및 요청
-                      const videoElement = document.createElement('video');
-                      videoElement.autoplay = true;
-                      videoElement.playsInline = true;
-                      videoElement.muted = false;
-                      videoElement.style.width = '100%';
-                      videoElement.style.height = '100%';
-                      videoElement.style.objectFit = 'cover';
-                      videoElement.style.backgroundColor = '#000';
-
-                      if (typeof planetKitConference.requestPeerVideo === 'function') {
-                        try {
-                          planetKitConference.requestPeerVideo({
-                            userId: peerId,
-                            resolution: 'vga',
-                            videoViewElement: videoElement
-                          });
-                          remoteVideoElementsRef.current.set(peerId, videoElement);
-                          console.log('[PlanetKit] Requested video for existing peer:', peerId);
-                        } catch (err) {
-                          console.warn('[PlanetKit] Failed to request peer video:', err);
-                        }
-                      }
-
-                      existingPeers.push({
-                        id: peerId,
-                        name: peerName,
-                        isVideoOn: peer.videoState !== undefined ? peer.videoState === 'enabled' : true,
-                        isAudioOn: peer.audioState !== undefined ? peer.audioState === 'enabled' : true,
-                        videoElement: videoElement
-                      });
-                    });
-                  }
-                } catch (err) {
-                  console.warn('[PlanetKit] Could not get peer list:', err);
-                }
-              }
-
-              setParticipants([localParticipant, ...existingPeers]);
+              console.log('[PlanetKit] evtConnected - local participant set, waiting for evtPeerListUpdated for existing peers');
 
               // 로컬 비디오 미러링 활성화 (비디오 엘리먼트가 완전히 렌더링된 후 호출)
               setTimeout(async () => {
@@ -429,6 +379,14 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
             // PlanetKit은 addedPeers, removedPeers 배열을 제공
             const addedPeers = peerUpdateInfo.addedPeers || [];
             const removedPeers = peerUpdateInfo.removedPeers || [];
+            const totalPeersCount = peerUpdateInfo.totalPeersCount || 0;
+
+            console.log('[PlanetKit] evtPeerListUpdated:', {
+              addedPeers: addedPeers.map((p: any) => p.userId || p.peerId || p.id),
+              removedPeers: removedPeers.map((p: any) => p.userId || p.peerId || p.id),
+              totalPeersCount,
+              currentRemoteVideoRefs: Array.from(remoteVideoElementsRef.current.keys())
+            });
 
             // 제거된 peer 처리
             removedPeers.forEach((peer: any) => {
