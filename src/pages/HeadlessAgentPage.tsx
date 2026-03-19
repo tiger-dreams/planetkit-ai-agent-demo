@@ -31,6 +31,7 @@ export const HeadlessAgentPage = () => {
   const userId = searchParams.get('userId') || `AI_AGENT_${Date.now()}`;
   const language = (searchParams.get('lang') || 'ko') as AgentLanguage;
   const voice = searchParams.get('voice') || 'Kore';
+  const provider = (searchParams.get('provider') || 'gemini') as 'gemini' | 'openai';
 
   // State
   const [agentState, setAgentState] = useState<AIAgentState>('idle');
@@ -48,7 +49,7 @@ export const HeadlessAgentPage = () => {
   // Initialize headless agent
   useEffect(() => {
     console.log('[HeadlessAgent] Initializing...');
-    console.log('[HeadlessAgent] Room:', roomId, 'User:', userId, 'Language:', language);
+    console.log('[HeadlessAgent] Room:', roomId, 'User:', userId, 'Language:', language, 'Provider:', provider);
 
     const initializeAgent = async () => {
       try {
@@ -425,13 +426,14 @@ registerProcessor('audio-playback-processor', AudioPlaybackProcessor);
     (audioContextRef.current as any)._playbackNode = playbackNode;
     console.log('[HeadlessAgent] ✅ AudioWorklet connected to MediaStreamDestination');
 
-    // Connect to Gemini AI
+    // Connect to AI (Gemini or OpenAI)
     await aiAgentService.connect({
       language,
       voice,
       systemPrompt: AGENT_SYSTEM_PROMPTS[language],
+      provider,
     });
-    console.log('[HeadlessAgent] ✅ Gemini AI connected');
+    console.log(`[HeadlessAgent] ✅ ${provider.toUpperCase()} AI connected`);
 
     console.log('[HeadlessAgent] ✅ Audio routing setup complete (AudioWorklet + Ring Buffer)');
   };
@@ -460,6 +462,7 @@ registerProcessor('audio-playback-processor', AudioPlaybackProcessor);
         <div>User ID: {userId}</div>
         <div>Language: {language}</div>
         <div>Voice: {voice}</div>
+        <div>Provider: {provider}</div>
         <div style={{ marginTop: '10px', color: '#ff0' }}>
           {window.agentConnected ? '✅ Ready (Puppeteer can proceed)' : '⏳ Initializing...'}
         </div>
