@@ -1,12 +1,15 @@
 # PlanetKit AI Agent Demo
 
-A mobile-first LINE LIFF video conferencing application with **AI Agent** powered by Google Gemini 2.0 Multimodal Live API, built on **LINE PlanetKit Web SDK 5.5**.
+A mobile-first LINE LIFF video conferencing application with **AI Agent** powered by Google Gemini 2.0 Live API or OpenAI Realtime API, built on **LINE PlanetKit Web SDK 5.5**.
 
 ## Features
 
 - **LINE LIFF Integration** - Seamless LINE authentication and in-app browser support
 - **PlanetKit Web SDK 5.5** - HD group video conferencing with WebRTC
-- **AI Agent (Gemini 2.0)** - Real-time AI assistant that joins group calls via voice
+- **AI Agent (Multi-Provider)** - Real-time AI assistant with support for:
+  - **Google Gemini 2.0 Live API** - Default provider with 16kHz input audio
+  - **OpenAI Realtime API** - Alternative provider with server-side VAD
+- **Barge-in Support** - Interrupt AI responses by speaking (auto-cancels AI output)
 - **Listen / Respond Mode** - Toggle AI between passive listening and active conversation
 - **Agent Call (1-to-1)** - Outbound voice calls via PlanetKit Agent Call API
 - **Multi-language Support** - Korean, English, Japanese, Traditional Chinese, Thai
@@ -44,9 +47,18 @@ A mobile-first LINE LIFF video conferencing application with **AI Agent** powere
 **Audio Pipeline:**
 1. Room participants speak → audio sent via WebRTC to Planet Server
 2. AI Agent's Chrome captures room audio via `captureStream()`
-3. AudioWorklet encodes to PCM16 (16kHz) → sent to Gemini via WebSocket
-4. Gemini responds with audio → decoded to Float32 → routed through `MediaStreamDestination`
+3. AudioWorklet encodes to PCM16 (16kHz for Gemini, 24kHz for OpenAI) → sent to AI provider via WebSocket
+4. AI provider responds with audio → decoded to Float32 (24kHz) → routed through `MediaStreamDestination`
 5. AI voice broadcast to all participants via `setCustomMediaStream()`
+
+**Provider-Specific Features:**
+| Feature | Gemini 2.0 | OpenAI Realtime |
+|---------|------------|-----------------|
+| Input Sample Rate | 16kHz | 24kHz |
+| Output Sample Rate | 24kHz | 24kHz |
+| VAD (Voice Activity Detection) | Client-side | Server-side |
+| Barge-in | State transition | `response.cancel` |
+| Turn Detection | Client-managed | Server VAD (threshold: 0.5) |
 
 See [docs/architecture-ai-agent-windows-vm.puml](docs/architecture-ai-agent-windows-vm.puml) and [docs/userflow-ai-agent-media-flow.puml](docs/userflow-ai-agent-media-flow.puml) for detailed diagrams.
 
@@ -63,8 +75,9 @@ Before getting started, you need:
 3. **LINE Planet Console Account** - For PlanetKit video/audio SDK
    - Obtain: Service ID, API Key, API Secret
    - Register callback URLs for event notifications
-4. **Google AI Studio Account** - For AI Agent (Gemini API)
-   - Get API key at: https://aistudio.google.com
+4. **AI Provider API Key** - For AI Agent (at least one required):
+   - **Gemini**: Get API key at https://aistudio.google.com
+   - **OpenAI**: Get API key at https://platform.openai.com/api-keys (requires Realtime API access)
 5. **Vercel Account** (Free Hobby plan works) - Frontend + serverless API deployment
 6. **Windows VM** (Azure or similar) - AI Agent service (requires Chrome browser installed)
 
@@ -121,13 +134,34 @@ Update LIFF Endpoint URL in LINE Developers Console to your Vercel domain.
 5. Set environment variables:
    ```
    FRONTEND_URL=https://your-app.vercel.app
-   GEMINI_API_KEY=your-gemini-api-key
    CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe
    PORT=3000
    ```
-6. Start the server: `node server-windows.js` (use PM2 for production)
-7. Open firewall port 3000
-8. Set `VITE_RENDER_SERVICE_URL=http://your-vm-ip:3000` in Vercel env vars
+6. Set AI provider API keys in Vercel (at least one required):
+   ```
+   GEMINI_API_KEY=your-gemini-api-key     # For Gemini provider (default)
+   OPENAI_API_KEY=your-openai-api-key     # For OpenAI provider (optional)
+   ```
+7. Start the server: `node server-windows.js` (use PM2 for production)
+8. Open firewall port 3000
+9. Set `VITE_RENDER_SERVICE_URL=http://your-vm-ip:3000` in Vercel env vars
+
+**Selecting AI Provider:**
+When inviting an AI Agent, specify the provider via the `provider` parameter:
+- Default: `gemini` (Google Gemini 2.0 Live API)
+- Alternative: `openai` (OpenAI Realtime API)
+
+Example API call:
+```json
+POST /join-as-agent
+{
+  "roomId": "room-123",
+  "userId": "ai-agent",
+  "language": "en",
+  "voice": "Kore",
+  "provider": "openai"
+}
+```
 
 ### Phase 7: End-to-End Test
 
@@ -172,7 +206,11 @@ planetkit-ai-agent-demo/
 │   │   ├── AIAgentBridgeMeeting.tsx # AI Agent management in group calls
 │   │   └── ...
 │   ├── services/
-│   │   └── ai-agent-service.ts      # Gemini 2.0 WebSocket client
+│   │   ├── ai-agent-service.ts      # Multi-provider AI client orchestrator
+│   │   └── providers/
+│   │       ├── base-provider.ts     # Abstract base class for AI providers
+│   │       ├── gemini-provider.ts   # Gemini 2.0 Live API implementation
+│   │       └── openai-provider.ts   # OpenAI Realtime API implementation
 │   ├── config/
 │   │   └── ai-agent-languages.ts    # Multi-language prompts & voices
 │   └── utils/
@@ -199,7 +237,7 @@ Compatible with Vercel Hobby plan (max 12 functions):
 
 | Endpoint | Description |
 |----------|-------------|
-| `/api/ai-agent-session` | Returns Gemini WebSocket config |
+| `/api/ai-agent-session` | Returns AI provider WebSocket config (Gemini or OpenAI) |
 | `/api/agent-call` | Agent Call DB init & call initiation |
 | `/api/callback` | Unified PlanetKit event callbacks |
 | `/api/line` | LINE messaging, token, user list |
@@ -210,14 +248,20 @@ Compatible with Vercel Hobby plan (max 12 functions):
 
 - [PlanetKit Documentation](https://docs.lineplanet.me)
 - [LINE LIFF Documentation](https://developers.line.biz/en/docs/liff/)
-- [Google AI Studio (Gemini API Key)](https://aistudio.google.com)
-- [Gemini Multimodal Live API](https://ai.google.dev/gemini-api/docs/multimodal-live)
+- **Gemini:**
+  - [Google AI Studio (API Key)](https://aistudio.google.com)
+  - [Gemini Multimodal Live API](https://ai.google.dev/gemini-api/docs/multimodal-live)
+- **OpenAI:**
+  - [OpenAI Platform (API Key)](https://platform.openai.com/api-keys)
+  - [OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime)
 
 ## Tech Stack
 
 - **Frontend**: Vite + React 18 + TypeScript + Tailwind CSS + shadcn/ui
 - **Video SDK**: LINE PlanetKit Web SDK 5.5
-- **AI**: Google Gemini 2.0 Multimodal Live API (WebSocket)
+- **AI Providers**:
+  - Google Gemini 2.0 Live API (WebSocket, 16kHz input)
+  - OpenAI Realtime API (WebSocket, 24kHz input, server-side VAD)
 - **Auth**: LINE LIFF (LINE Front-end Framework)
 - **Backend**: Vercel Serverless Functions + Vercel Postgres
 - **AI Agent Runtime**: Puppeteer on Windows VM

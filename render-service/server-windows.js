@@ -30,10 +30,11 @@ app.get('/health', (req, res) => {
  * - roomId: PlanetKit room ID
  * - userId: AI Agent user ID
  * - language: 'ko' | 'en'
- * - voice: Gemini voice ID
+ * - voice: AI voice ID
+ * - provider: 'gemini' | 'openai' (default: 'gemini')
  */
 app.post('/join-as-agent', async (req, res) => {
-  const { roomId, userId, language = 'ko', voice = 'Kore' } = req.body;
+  const { roomId, userId, language = 'ko', voice = 'Kore', provider = 'gemini' } = req.body;
 
   if (!roomId || !userId) {
     return res.status(400).json({
@@ -42,7 +43,7 @@ app.post('/join-as-agent', async (req, res) => {
     });
   }
 
-  console.log('[Windows Agent] Join request:', { roomId, userId, language, voice });
+  console.log('[Windows Agent] Join request:', { roomId, userId, language, voice, provider });
 
   try {
     // Check if session already exists
@@ -115,7 +116,7 @@ app.post('/join-as-agent', async (req, res) => {
 
     // Load headless agent page
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
-    const agentUrl = `${frontendUrl}/headless-agent?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}&lang=${language}&voice=${encodeURIComponent(voice)}`;
+    const agentUrl = `${frontendUrl}/headless-agent?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}&lang=${language}&voice=${encodeURIComponent(voice)}&provider=${provider}`;
 
     console.log('[Windows Agent] Loading:', agentUrl);
     await page.goto(agentUrl, { waitUntil: 'networkidle2', timeout: 60000 });
