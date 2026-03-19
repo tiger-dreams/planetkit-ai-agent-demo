@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Activity, LogIn, User, Video, Settings, Globe, Copy, Check, RefreshCw, CheckCircle, XCircle } from "lucide-react";
+import { Activity, LogIn, User, Video, Settings, Globe, Copy, Check, RefreshCw, CheckCircle, XCircle, Bot } from "lucide-react";
 import { useVideoSDK } from "@/contexts/VideoSDKContext";
 import { useLiff } from "@/contexts/LiffContext";
 import { useToast } from "@/hooks/use-toast";
@@ -35,7 +35,7 @@ const SetupPage = () => {
   const { language } = useLanguage();
   const t = getTranslations(language);
   const { isLoggedIn, isInitialized, needsLiffId, liffId, profile, error: liffError, login, initializeLiff } = useLiff();
-  const { planetKitConfig, setPlanetKitConfig, isConfigured } = useVideoSDK();
+  const { planetKitConfig, setPlanetKitConfig, isConfigured, aiProvider, setAIProvider } = useVideoSDK();
   const [liffIdInput, setLiffIdInput] = useState('');
   const [customRoomId, setCustomRoomId] = useState('');
   const [isCustomMode, setIsCustomMode] = useState(false);
@@ -463,7 +463,7 @@ Status: ${debugInfo.status}`;
 
   // 메인 설정 화면
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground pb-24">
       {/* 헤더 */}
       <div className="border-b border-border bg-card sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
@@ -665,6 +665,42 @@ Status: ${debugInfo.status}`;
           {/* Configuration Section (Environment + Custom Credentials 통합) */}
           <ConfigurationSection language={language} />
 
+          {/* AI Provider Selection */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Bot className="w-4 h-4" />
+                AI Provider
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Select the AI provider for the voice agent
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2">
+                <Button
+                  variant={aiProvider === 'gemini' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setAIProvider('gemini')}
+                >
+                  <span className="mr-2">🔮</span>
+                  Gemini
+                </Button>
+                <Button
+                  variant={aiProvider === 'openai' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setAIProvider('openai')}
+                >
+                  <span className="mr-2">🤖</span>
+                  OpenAI
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                {aiProvider === 'gemini' ? 'Using Google Gemini 2.0 Live API' : 'Using OpenAI Realtime API'}
+              </p>
+            </CardContent>
+          </Card>
+
           {/* Room ID */}
           <Card>
             <CardHeader>
@@ -752,7 +788,18 @@ Status: ${debugInfo.status}`;
             </CardContent>
           </Card>
 
-          {/* Join Meeting Button */}
+          {/* Info */}
+          <div className="text-center text-xs text-muted-foreground">
+            <p>
+              PlanetKit AI Agent Demo - LINE Video Conferencing with AI
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Fixed Bottom Join Button */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border z-50">
+        <div className="container mx-auto max-w-2xl">
           <Button
             onClick={handleJoinMeeting}
             disabled={!planetKitConfig.roomId || isJoining}
@@ -771,13 +818,6 @@ Status: ${debugInfo.status}`;
               </>
             )}
           </Button>
-
-          {/* Info */}
-          <div className="text-center text-xs text-muted-foreground">
-            <p>
-              PlanetKit AI Agent Demo - LINE Video Conferencing with AI
-            </p>
-          </div>
         </div>
       </div>
     </div>

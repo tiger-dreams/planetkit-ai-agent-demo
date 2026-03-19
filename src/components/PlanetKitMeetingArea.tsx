@@ -17,7 +17,8 @@ import {
   Ear,
   MessageCircle,
 } from "lucide-react";
-import { PlanetKitConfig, ConnectionStatus, Participant } from "@/types/video-sdk";
+import { PlanetKitConfig, ConnectionStatus, Participant, AIProvider } from "@/types/video-sdk";
+import { useVideoSDK } from "@/contexts/VideoSDKContext";
 import { useToast } from "@/hooks/use-toast";
 import { TileView, TileParticipant } from "@/components/TileView";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -43,6 +44,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
   const { language } = useLanguage();
   const t = getTranslations(language);
   const { liffId, liff, profile } = useLiff();
+  const { aiProvider } = useVideoSDK();
 
   // Determine if this is an agent call
   const isAgentCall = mode === 'agent-call';
@@ -910,6 +912,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
           userId: aiUserId,
           language,
           voice: agentVoice,
+          provider: aiProvider,
         }),
       });
 

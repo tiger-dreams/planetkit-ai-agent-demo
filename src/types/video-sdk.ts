@@ -1,4 +1,5 @@
 export type SDKType = 'planetkit';
+export type AIProvider = 'gemini' | 'openai';
 
 export enum ParticipantRole {
   HOST = 'host',

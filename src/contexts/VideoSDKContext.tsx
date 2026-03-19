@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { SDKType, PlanetKitConfig, CustomPlanetKitCredentials, FeatureAvailability } from '@/types/video-sdk';
+import { SDKType, AIProvider, PlanetKitConfig, CustomPlanetKitCredentials, FeatureAvailability } from '@/types/video-sdk';
 
 interface VideoSDKContextType {
   selectedSDK: SDKType;
@@ -10,6 +10,8 @@ interface VideoSDKContextType {
   customCredentials: CustomPlanetKitCredentials;
   setCustomCredentials: (credentials: CustomPlanetKitCredentials) => void;
   featureAvailability: FeatureAvailability;
+  aiProvider: AIProvider;
+  setAIProvider: (provider: AIProvider) => void;
 }
 
 const VideoSDKContext = createContext<VideoSDKContextType | undefined>(undefined);
@@ -20,6 +22,7 @@ interface VideoSDKProviderProps {
 
 export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
   const [selectedSDK, setSelectedSDK] = useState<SDKType>('planetkit'); // Default to PlanetKit
+  const [aiProvider, setAIProvider] = useState<AIProvider>('gemini'); // Default to Gemini
 
   // Calculate feature availability based on custom credentials
   const calculateFeatureAvailability = (creds: CustomPlanetKitCredentials): FeatureAvailability => {
@@ -156,6 +159,12 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
     if (savedSDK) {
       setSelectedSDK(savedSDK as SDKType);
     }
+
+    // Restore AI provider
+    const savedAIProvider = localStorage.getItem('aiProvider');
+    if (savedAIProvider && (savedAIProvider === 'gemini' || savedAIProvider === 'openai')) {
+      setAIProvider(savedAIProvider as AIProvider);
+    }
   }, []);
 
   // 설정 변경 시 localStorage에 저장
@@ -166,6 +175,10 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
   useEffect(() => {
     localStorage.setItem('selectedSDK', selectedSDK);
   }, [selectedSDK]);
+
+  useEffect(() => {
+    localStorage.setItem('aiProvider', aiProvider);
+  }, [aiProvider]);
 
   // Custom credentials 변경 시 localStorage 저장 및 planetKitConfig 업데이트
   useEffect(() => {
@@ -213,6 +226,8 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
     customCredentials,
     setCustomCredentials,
     featureAvailability,
+    aiProvider,
+    setAIProvider,
   };
 
   return (
