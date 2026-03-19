@@ -147,29 +147,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
 
     setConnectionStatus({ connected: false, connecting: true });
 
-    // 로컬 비디오 프리뷰용 미디어 스트림 획득 (오디오는 PlanetKit SDK가 joinConference에서 직접 관리)
-    try {
-      const localStream = await navigator.mediaDevices.getUserMedia({
-        video: !isAgentCall, // Agent call은 video 비활성화
-        audio: false         // 모든 모드에서 audio는 PlanetKit SDK가 직접 관리
-      });
-
-      // 로컬 비디오 엘리먼트에 스트림 연결 (Agent call이 아닐 경우만)
-      if (!isAgentCall && localVideoRef.current) {
-        localVideoRef.current.srcObject = localStream;
-        await localVideoRef.current.play();
-      }
-    } catch (mediaError) {
-      toast({
-        title: language === 'ko' ? "카메라/마이크 권한 필요" : "Camera/Mic permission required",
-        description: isAgentCall
-          ? (language === 'ko' ? "마이크 권한을 허용해주세요." : "Please allow microphone access.")
-          : (language === 'ko' ? "카메라와 마이크 권한을 허용해주세요." : "Please allow camera and microphone access."),
-        variant: "destructive",
-      });
-      setConnectionStatus({ connected: false, connecting: false });
-      return;
-    }
+    // PlanetKit SDK가 joinConference 시 미디어 스트림을 직접 관리함
+    // 별도의 getUserMedia 호출 불필요 (중복 권한 요청 방지)
 
     try {
       const attemptJoin = async (PlanetKitModule: any, envLabel: 'eval' | 'real') => {
