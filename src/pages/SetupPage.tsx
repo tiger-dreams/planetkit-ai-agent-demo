@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Activity, LogIn, User, Video, Settings, Globe, Copy, Check, RefreshCw } from "lucide-react";
+import { Activity, LogIn, User, Video, Settings, Globe, Copy, Check, RefreshCw, CheckCircle, XCircle } from "lucide-react";
 import { useVideoSDK } from "@/contexts/VideoSDKContext";
 import { useLiff } from "@/contexts/LiffContext";
 import { useToast } from "@/hooks/use-toast";
@@ -104,18 +104,10 @@ const SetupPage = () => {
       const roomValue = roomParam.toLowerCase();
       console.log('[SetupPage] Deep link room parameter detected:', roomValue);
 
-      if (presetRooms.includes(roomValue)) {
-        // Preset room (japan, korea, taiwan, thailand)
-        setSelectedRoomType(roomValue);
-        setPlanetKitConfig(prev => ({ ...prev, roomId: roomValue, accessToken: '' }));
-        console.log('[SetupPage] Auto-selected preset room:', roomValue);
-      } else {
-        // Custom room
-        setSelectedRoomType('custom');
-        setCustomRoomId(roomParam); // 원본 대소문자 유지
-        setPlanetKitConfig(prev => ({ ...prev, roomId: roomParam, accessToken: '' }));
-        console.log('[SetupPage] Auto-selected custom room:', roomParam);
-      }
+      // Set room ID from deep link parameter
+      setCustomRoomId(roomParam);
+      setPlanetKitConfig(prev => ({ ...prev, roomId: roomParam, accessToken: '' }));
+      console.log('[SetupPage] Auto-selected room from deep link:', roomParam);
     }
   }, [searchParams]); // searchParams 변경 시 실행
 
