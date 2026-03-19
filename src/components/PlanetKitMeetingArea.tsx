@@ -10,7 +10,6 @@ import {
   Clock,
   Users,
   Share2,
-  Phone,
   Bot,
   Loader2,
   UserMinus,
@@ -35,24 +34,14 @@ import type { AgentLanguage } from "@/config/ai-agent-languages";
 interface PlanetKitMeetingAreaProps {
   config: PlanetKitConfig;
   onDisconnect?: () => void;
-  mode?: 'group' | 'agent-call';
-  sessionId?: string;
 }
 
-export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: PlanetKitMeetingAreaProps) => {
+export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingAreaProps) => {
   const { toast } = useToast();
   const { language } = useLanguage();
   const t = getTranslations(language);
   const { liffId, liff, profile } = useLiff();
   const { aiProvider } = useVideoSDK();
-
-  // Determine if this is an agent call
-  const isAgentCall = mode === 'agent-call';
-
-  // Extract cc_param and autoAccept from URL for Agent Call
-  const urlParams = new URLSearchParams(window.location.search);
-  const ccParam = urlParams.get('cc_param');
-  const autoAccept = urlParams.get('autoAccept') === 'true';
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     connected: false,
@@ -119,14 +108,6 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
   // Note: Local user talking status is now handled by PlanetKit's evtMyTalkingStatusUpdated event
   // No need for manual AudioContext monitoring
 
-  // Auto-accept call if autoAccept parameter is present
-  useEffect(() => {
-    if (isAgentCall && autoAccept && !connectionStatus.connected && !connectionStatus.connecting) {
-      console.log('[Agent Call] Auto-accepting call due to autoAccept parameter');
-      connectToConference();
-    }
-  }, [isAgentCall, autoAccept, connectionStatus.connected, connectionStatus.connecting]);
-
   // PlanetKit Conference 연결
   const connectToConference = async () => {
     // iOS WebKit 더블 탭 방지: React 상태 업데이트보다 빠른 ref 기반 가드
@@ -154,148 +135,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
 
     try {
       const attemptJoin = async (PlanetKitModule: any, envLabel: 'eval' | 'real') => {
-        // Agent Call (1-to-1) vs Conference (Group Call)
-        if (isAgentCall) {
-          // 1-to-1 Call 방식 (Agent Call)
-          const planetKitCall = new PlanetKitModule.Call();
-
-          const callDelegate = {
-            evtVerified: async () => {
-              console.log('[Agent Call] Call verified');
-
-              // Now accept the call after verification
-              try {
-                console.log('[Agent Call] Accepting call...');
-                await planetKitCall.acceptCall();
-                console.log('[Agent Call] Call accepted successfully');
-              } catch (acceptError: any) {
-                console.error('[Agent Call] Failed to accept call:', acceptError);
-                toast({
-                  title: language === 'ko' ? '통화 수락 실패' : 'Failed to Accept Call',
-                  description: acceptError?.message || (language === 'ko' ? '통화 수락 중 오류가 발생했습니다.' : 'An error occurred while accepting the call.'),
-                  variant: 'destructive'
-                });
-              }
-            },
-
-            evtConnected: () => {
-              console.log('[Agent Call] Call connected');
-              setConnectionStatus({ connected: true, connecting: false });
-              setConnectionStartTime(new Date());
-
-              setParticipants([{
-                id: "agent",
-                name: language === 'ko' ? '상담원' : 'Agent',
-                isVideoOn: false, // Audio-only
-                isAudioOn: true,
-                videoElement: undefined
-              }]);
-
-              toast({
-                title: language === 'ko' ? '통화 연결됨' : 'Call Connected',
-                description: language === 'ko' ? 'Agent와 연결되었습니다.' : 'Connected to Agent.',
-              });
-            },
-
-            evtDisconnected: (disconnectDetails: any) => {
-              console.log('[Agent Call] Call disconnected by server:', disconnectDetails);
-
-              // Note: Server has already disconnected the call, so we just clean up local resources
-              // Do NOT call planetKitCall.disconnect() here - connection is already closed
-
-              // Clean up local media stream
-              if (localVideoRef.current && localVideoRef.current.srcObject) {
-                const stream = localVideoRef.current.srcObject as MediaStream;
-                console.log('[Agent Call] Stopping local media tracks:', stream.getTracks().length);
-                stream.getTracks().forEach(track => {
-                  console.log('[Agent Call] Stopping track:', track.kind, track.label, 'readyState:', track.readyState);
-                  track.stop();
-                  console.log('[Agent Call] Track stopped, new readyState:', track.readyState);
-                });
-                localVideoRef.current.srcObject = null;
-                console.log('[Agent Call] Local video srcObject cleared');
-              }
-
-              // Force cleanup of any remaining media streams
-              setTimeout(() => {
-                navigator.mediaDevices.enumerateDevices().then(devices => {
-                  console.log('[Agent Call] Media devices after cleanup:', devices.filter(d => d.kind === 'audioinput').length, 'audio inputs');
-                }).catch(err => {
-                  console.warn('[Agent Call] Could not enumerate devices:', err);
-                });
-              }, 100);
-
-              setConnectionStatus({ connected: false, connecting: false });
-              setParticipants([]);
-              setConnectionStartTime(null);
-              setCallDuration("00:00:00");
-
-              toast({
-                title: language === 'ko' ? '통화 종료' : 'Call Ended',
-                description: language === 'ko' ? 'Agent Call이 종료되었습니다.' : 'Agent Call ended.',
-              });
-
-              // Navigate to setup page after disconnect
-              if (onDisconnect) {
-                onDisconnect();
-              }
-            },
-
-            evtError: (error: any) => {
-              console.error('[Agent Call] Error:', error);
-              toast({
-                title: language === 'ko' ? '통화 오류' : 'Call Error',
-                description: error?.message || (language === 'ko' ? '통화 중 오류가 발생했습니다.' : 'An error occurred during the call.'),
-                variant: 'destructive'
-              });
-            }
-          };
-
-          try {
-            // cc_param 검증
-            if (!ccParam) {
-              throw new Error('cc_param is missing from URL. Please use the deeplink provided in the notify callback.');
-            }
-
-            console.log('[Agent Call] cc_param extracted from URL:', ccParam);
-            console.log('[Agent Call] cc_param length:', ccParam.length);
-
-            // Verify incoming call with proper params (based on 1-to-1 call sample)
-            console.log('[Agent Call] Verifying call...');
-            console.log('[Agent Call] verifyCall params:', {
-              myId: config.userId,
-              myServiceId: config.serviceId,
-              mediaType: 'audio',
-              ccParam: ccParam.substring(0, 50) + '...',
-              delegate: 'present'
-            });
-
-            // Use proper verifyCall params from sample code
-            await planetKitCall.verifyCall({
-              myId: config.userId,
-              myServiceId: config.serviceId,
-              mediaType: 'audio',
-              ccParam: ccParam,
-              mediaHtmlElement: {
-                peer: {
-                  audio: audioElementRef.current
-                }
-              },
-              delegate: callDelegate
-            });
-
-            // acceptCall() is now called in evtVerified callback
-            console.log('[Agent Call] Waiting for call verification...');
-
-            setConference(planetKitCall);
-          } catch (callError: any) {
-            console.error('[Agent Call] Failed to connect:', callError);
-            throw new Error(`Agent Call connection failed: ${callError.message}`);
-          }
-
-        } else {
-          // Conference 방식 (Group Call)
-          const planetKitConference = new PlanetKitModule.Conference();
+        // Conference 방식 (Group Call)
+        const planetKitConference = new PlanetKitModule.Conference();
 
           const conferenceDelegate = {
             evtConnected: async () => {
@@ -696,8 +537,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
         await planetKitConference.joinConference(conferenceParams);
         console.log('[PlanetKit] joinConference succeeded');
         setConference(planetKitConference);
-      } // else 블록 끝
-    }; // attemptJoin 함수 끝
+      }; // attemptJoin 함수 끝
 
     // 환경은 항상 'eval' (기본값)
     const environment = config.environment || 'eval';
@@ -1164,15 +1004,11 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
                   <Clock className="w-4 h-4" />
                   <span className="text-sm font-mono">{callDuration}</span>
                 </div>
-                {!isAgentCall && (
-                  <>
-                    <div className="w-px h-4 bg-white/20" />
-                    <div className="flex items-center gap-1.5">
-                      <Users className="w-4 h-4" />
-                      <span className="text-sm">{participants.length}</span>
-                    </div>
-                  </>
-                )}
+                <div className="w-px h-4 bg-white/20" />
+                <div className="flex items-center gap-1.5">
+                  <Users className="w-4 h-4" />
+                  <span className="text-sm">{participants.length}</span>
+                </div>
                 {aiAgentJoined && isAIAgentInviter && (
                   <>
                     <div className="w-px h-4 bg-white/20" />
@@ -1194,9 +1030,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
                 <LanguageSelector />
                 <div className="flex items-center gap-2">
                   <div className="text-xs text-white/70 font-medium">
-                    {isAgentCall
-                      ? (language === 'ko' ? '음성 통화' : 'Voice Call')
-                      : config.roomId && config.environment
+                    {config.roomId && config.environment
                       ? `${config.roomId} - ${config.environment === 'eval' ? 'Eval' : 'Real'}`
                       : config.roomId
                       ? config.roomId
@@ -1207,62 +1041,30 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
             </div>
           </div>
 
-          {/* 비디오 그리드 또는 오디오 시각화 */}
+          {/* 비디오 그리드 */}
           <div className="absolute top-[52px] bottom-[100px] left-0 right-0 w-full">
-            {isAgentCall ? (
-              /* Agent Call: 오디오 시각화 */
-              <div className="flex flex-col items-center justify-center h-full space-y-8">
-                {/* Agent Avatar */}
-                <div className="w-32 h-32 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Phone className="w-16 h-16 text-primary" />
-                </div>
-
-                {/* Call Duration */}
-                <div className="text-center space-y-2">
-                  <p className="text-white text-4xl font-semibold">{callDuration}</p>
-                  <p className="text-white/70 text-sm">
-                    {language === 'ko' ? '통화 중' : 'Call in progress'}
-                  </p>
-                </div>
-
-                {/* Speaking Indicator - shows when audio is on */}
-                {isAudioOn && (
-                  <div className="flex justify-center gap-1.5">
-                    <div className="w-2 h-8 bg-primary rounded-full animate-pulse" />
-                    <div className="w-2 h-12 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
-                    <div className="w-2 h-10 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                    <div className="w-2 h-12 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
-                    <div className="w-2 h-8 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* Group Call: 비디오 그리드 */
-              <TileView participants={tileParticipants} />
-            )}
+            <TileView participants={tileParticipants} />
           </div>
 
           {/* 하단 컨트롤 */}
           <div className="fixed bottom-0 left-0 right-0 z-20 bg-black/70 backdrop-blur-sm border-t border-white/10">
             <div className="flex items-center justify-center gap-3 px-4 py-6">
-              {/* 비디오 토글 - Agent Call에서는 숨김 */}
-              {!isAgentCall && (
-                <Button
-                  onClick={toggleVideo}
-                  size="lg"
-                  className={`w-12 h-12 rounded-full ${
-                    isVideoOn
-                      ? 'bg-white/20 hover:bg-white/30 text-white'
-                      : 'bg-red-600 hover:bg-red-700 text-white'
-                  }`}
-                >
-                  {isVideoOn ? (
-                    <Video className="w-5 h-5" />
-                  ) : (
-                    <VideoOff className="w-5 h-5" />
-                  )}
-                </Button>
-              )}
+              {/* 비디오 토글 */}
+              <Button
+                onClick={toggleVideo}
+                size="lg"
+                className={`w-12 h-12 rounded-full ${
+                  isVideoOn
+                    ? 'bg-white/20 hover:bg-white/30 text-white'
+                    : 'bg-red-600 hover:bg-red-700 text-white'
+                }`}
+              >
+                {isVideoOn ? (
+                  <Video className="w-5 h-5" />
+                ) : (
+                  <VideoOff className="w-5 h-5" />
+                )}
+              </Button>
 
               {/* 마이크 토글 */}
               <Button
@@ -1281,20 +1083,18 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
                 )}
               </Button>
 
-              {/* 초대 링크 공유 - Agent Call에서는 숨김 */}
-              {!isAgentCall && (
-                <Button
-                  onClick={shareInviteUrl}
-                  size="lg"
-                  className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 text-white"
-                  title={language === 'ko' ? '초대 링크 복사' : 'Copy Invite Link'}
-                >
-                  <Share2 className="w-5 h-5" />
-                </Button>
-              )}
+              {/* 초대 링크 공유 */}
+              <Button
+                onClick={shareInviteUrl}
+                size="lg"
+                className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 text-white"
+                title={language === 'ko' ? '초대 링크 복사' : 'Copy Invite Link'}
+              >
+                <Share2 className="w-5 h-5" />
+              </Button>
 
-              {/* AI Agent 초대/내보내기 - Agent Call에서는 숨김 */}
-              {!isAgentCall && !aiAgentJoined && !aiAgentSessionUsed && (
+              {/* AI Agent 초대/내보내기 */}
+              {!aiAgentJoined && !aiAgentSessionUsed && (
                 <Button
                   onClick={inviteAIAgent}
                   disabled={isInvitingAIAgent}
@@ -1309,7 +1109,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
                   )}
                 </Button>
               )}
-              {!isAgentCall && aiAgentJoined && (
+              {aiAgentJoined && (
                 <Button
                   onClick={kickAIAgent}
                   disabled={isKickingAIAgent}
@@ -1325,7 +1125,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
                 </Button>
               )}
               {/* AI Agent 듣기/응답 모드 토글 - 초대자만 표시 */}
-              {!isAgentCall && aiAgentJoined && isAIAgentInviter && (
+              {aiAgentJoined && isAIAgentInviter && (
                 <Button
                   onClick={toggleAgentMode}
                   disabled={isTogglingMode}
@@ -1350,7 +1150,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
                   )}
                 </Button>
               )}
-              {!isAgentCall && !aiAgentJoined && aiAgentSessionUsed && (
+              {!aiAgentJoined && aiAgentSessionUsed && (
                 <Button
                   disabled
                   size="lg"

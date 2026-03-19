@@ -114,10 +114,6 @@ const SetupPage = () => {
   // 자동 토큰 생성 및 미팅 참여
   useEffect(() => {
     const roomParam = searchParams.get('room');
-    const modeParam = searchParams.get('mode');
-    const sidParam = searchParams.get('sid');
-    const ccParamValue = searchParams.get('cc_param');
-    const isAgentCall = modeParam === 'agent-call';
 
     // 디버그 정보 업데이트 (room 파라미터가 있을 때만)
     if (roomParam) {
@@ -140,8 +136,6 @@ const SetupPage = () => {
 
       console.log('[SetupPage] Auto-token useEffect triggered', {
         status,
-        mode: modeParam,
-        sid: sidParam,
         hasToken: !!planetKitConfig.accessToken,
         alreadyGenerated: autoTokenGeneratedRef.current
       });
@@ -165,7 +159,7 @@ const SetupPage = () => {
       // 필수 설정이 모두 있는지 확인
       if (planetKitConfig.serviceId && planetKitConfig.apiKey && planetKitConfig.userId) {
         autoTokenGeneratedRef.current = true; // 중복 실행 방지
-        console.log('[SetupPage] Auto-generating token for deep link entry...', { isAgentCall });
+        console.log('[SetupPage] Auto-generating token for deep link entry...');
         setDebugInfo(prev => prev ? { ...prev, status: '🚀 Generating token...' } : null);
 
         // 토큰 생성
@@ -187,27 +181,14 @@ const SetupPage = () => {
           // 토큰 생성 성공 toast
           toast({
             title: language === 'ko' ? '자동 입장 준비 완료' : 'Auto-entry Ready',
-            description: isAgentCall
-              ? (language === 'ko' ? '음성 통화에 입장합니다.' : 'Joining voice call.')
-              : (language === 'ko' ? `${planetKitConfig.roomId} 룸에 입장할 수 있습니다.` : `Ready to join ${planetKitConfig.roomId} room.`),
+            description: language === 'ko' ? `${planetKitConfig.roomId} 룸에 입장할 수 있습니다.` : `Ready to join ${planetKitConfig.roomId} room.`,
           });
 
           // 0.5초 후 자동으로 미팅 페이지로 이동
           setTimeout(() => {
-            if (isAgentCall && sidParam) {
-              console.log('[SetupPage] Auto-navigating to agent call meeting...', { sid: sidParam, cc_param: ccParamValue ? 'present' : 'missing' });
-              setDebugInfo(prev => prev ? { ...prev, status: '🚀 Navigating to agent call...' } : null);
-              // cc_param을 URL에 포함해서 전달
-              const urlParams = new URLSearchParams({ sid: sidParam });
-              if (ccParamValue) {
-                urlParams.set('cc_param', ccParamValue);
-              }
-              navigate(`/agent-call-meeting?${urlParams.toString()}`);
-            } else {
-              console.log('[SetupPage] Auto-navigating to meeting page...');
-              setDebugInfo(prev => prev ? { ...prev, status: '🚀 Navigating to meeting...' } : null);
-              navigate('/planetkit_meeting');
-            }
+            console.log('[SetupPage] Auto-navigating to meeting page...');
+            setDebugInfo(prev => prev ? { ...prev, status: '🚀 Navigating to meeting...' } : null);
+            navigate('/planetkit_meeting');
           }, 500);
         }).catch(error => {
           console.error('[SetupPage] Auto token generation failed:', error);

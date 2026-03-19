@@ -118,10 +118,7 @@ npm run dev             # Starts on localhost:8080
 ### Phase 5: Callback & LIFF Endpoint Registration
 
 Register callback URLs in PlanetKit Console:
-- **Group Call**: `https://{domain}/api/callback?action=planetkit`
-- **Agent Call status**: `https://{domain}/api/callback?action=agent-call`
-- **Agent Call notify**: `https://{domain}/api/callback?action=notify`
-- **1-to-1 Call lifecycle**: `https://{domain}/api/callback?action=one-to-one-call`
+- **Group Call**: `https://{domain}/api/planetkit-callback`
 
 Update LIFF Endpoint URL in LINE Developers Console to your Vercel domain.
 
@@ -215,13 +212,10 @@ planetkit-ai-agent-demo/
 │   │   └── ai-agent-languages.ts    # Multi-language prompts & voices
 │   └── utils/
 │       └── token-generator.ts       # PlanetKit JWT (DEMO ONLY)
-├── api/                             # Vercel Serverless Functions (6 total)
-│   ├── ai-agent-session.ts          # Gemini WebSocket config
-│   ├── agent-call.ts                # Agent Call initiation
-│   ├── callback.ts                  # Unified PlanetKit callbacks
+├── api/                             # Vercel Serverless Functions
+│   ├── ai-agent-session.ts          # AI provider WebSocket config
 │   ├── line.ts                      # LINE messaging & token
-│   ├── retry.ts                     # Retry scheduling (QStash)
-│   └── planetkit-callback.ts        # Legacy callback proxy
+│   └── planetkit-callback.ts        # PlanetKit event callback
 ├── render-service/
 │   ├── server-windows.js            # Windows VM Puppeteer orchestration
 │   └── package.json
@@ -231,18 +225,13 @@ planetkit-ai-agent-demo/
     └── userflow-ai-agent-media-flow.puml
 ```
 
-## API Endpoints (6 Vercel Serverless Functions)
-
-Compatible with Vercel Hobby plan (max 12 functions):
+## API Endpoints (Vercel Serverless Functions)
 
 | Endpoint | Description |
 |----------|-------------|
 | `/api/ai-agent-session` | Returns AI provider WebSocket config (Gemini or OpenAI) |
-| `/api/agent-call` | Agent Call DB init & call initiation |
-| `/api/callback` | Unified PlanetKit event callbacks |
 | `/api/line` | LINE messaging, token, user list |
-| `/api/retry` | Retry scheduling via QStash |
-| `/api/planetkit-callback` | Legacy proxy to unified callback |
+| `/api/planetkit-callback` | PlanetKit group call event callback |
 
 ## Developer Resources
 

@@ -9,9 +9,6 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import SetupPage from "./pages/SetupPage";
 import PlanetKitMeeting from "./pages/PlanetKitMeeting";
 import NotFound from "./pages/NotFound";
-import { AgentCallTrigger } from "./pages/AgentCallTrigger";
-import { AgentCallMeeting } from "./pages/AgentCallMeeting";
-import { ScheduleRetryPage } from "./pages/ScheduleRetryPage";
 import { AIAgentCallMeeting } from "./pages/AIAgentCallMeeting";
 import { AIAgentBridgeMeeting } from "./pages/AIAgentBridgeMeeting";
 import { HeadlessAgentPage } from "./pages/HeadlessAgentPage";
@@ -35,11 +32,6 @@ const App = () => (
               {/* PlanetKit Conference */}
               <Route path="/planetkit_meeting" element={<PlanetKitMeeting />} />
 
-              {/* Agent Call (1-to-1 outbound voice call) */}
-              <Route path="/agent-call" element={<AgentCallTrigger />} />
-              <Route path="/agent-call-meeting" element={<AgentCallMeeting />} />
-              <Route path="/schedule-retry" element={<ScheduleRetryPage />} />
-
               {/* AI Agent Call - Direct Gemini Voice Call */}
               <Route path="/ai-agent-call" element={<AIAgentCallMeeting />} />
 
@@ -48,11 +40,6 @@ const App = () => (
 
               {/* Headless AI Agent - Runs in Puppeteer on Windows VM */}
               <Route path="/headless-agent" element={<HeadlessAgentPage />} />
-
-              {/* LIFF deep link compatibility (when LIFF Endpoint URL is /setup) */}
-              <Route path="/setup/agent-call" element={<AgentCallTrigger />} />
-              <Route path="/setup/agent-call-meeting" element={<AgentCallMeeting />} />
-              <Route path="/setup/schedule-retry" element={<ScheduleRetryPage />} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

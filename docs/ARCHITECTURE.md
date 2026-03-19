@@ -84,69 +84,15 @@ AI Agent joins the conference as a separate participant via a headless Chrome in
 **Why Windows VM?**
 Linux headless Chrome breaks Web Audio API (AudioWorklet fails silently). Windows with `headless: false` + `--window-position=-2000,0` (off-screen) keeps audio functional.
 
-### 3. Agent Call (1-to-1 Outbound)
-
-Server-orchestrated outbound voice call via PlanetKit Agent Call API.
-
-```
-Trigger ──► API ──► PlanetKit Agent Call API ──► Callback
-                                                    │
-                                              Notify callback
-                                                    │
-                                              LINE push message
-                                              [Accept Call] button
-                                                    │
-                                              User opens LIFF
-                                              Auto-accepts call
-```
-
-**Timeout & Retry:**
-- 60s no answer → status `missed` → LINE push with retry option
-- User clicks retry → QStash schedules 5-min delay → re-initiates call
-- Max 3 retry attempts
-
-**Key files:**
-- `src/pages/AgentCallTrigger.tsx` — Trigger UI
-- `src/pages/AgentCallMeeting.tsx` — Call acceptance UI
-- `api/agent-call.ts` — Call initiation + DB init
-- `api/callback.ts` — All callback handling
-- `api/retry.ts` — QStash retry scheduling
-
 ---
 
-## API Endpoints (6 Vercel Functions)
+## API Endpoints (Vercel Functions)
 
 | Endpoint | Methods | Description |
 |----------|---------|-------------|
-| `/api/ai-agent-session` | POST | Returns Gemini WebSocket config |
-| `/api/agent-call` | GET, POST | `init-db`: create tables, `initiate`: start call |
-| `/api/callback` | GET, POST | Unified handler for all PlanetKit callbacks |
+| `/api/ai-agent-session` | POST | Returns AI provider WebSocket config (Gemini or OpenAI) |
 | `/api/line` | GET, POST | `get-followers`, `get-token`, `send-invite` |
-| `/api/retry` | POST | `schedule`: queue retry, `execute`: run retry |
-| `/api/planetkit-callback` | GET, POST | Legacy proxy to `/api/callback?action=planetkit` |
-
----
-
-## Database Schema
-
-### `planetkit_events` — Group call events
-| Column | Type | Description |
-|--------|------|-------------|
-| event_type | VARCHAR | GCALL_EVT_START, USER_JOIN, USER_LEAVE, etc. |
-| room_id | VARCHAR | Conference room ID |
-| user_id | VARCHAR | Participant user ID |
-| data | JSONB | Raw callback data |
-
-### `agent_call_sessions` — 1-to-1 call sessions
-| Column | Type | Description |
-|--------|------|-------------|
-| sid | VARCHAR(UNIQUE) | PlanetKit session ID |
-| status | VARCHAR | initiated → ringing → answered → ended / missed |
-| is_retry | BOOLEAN | Whether this is a retry call |
-| retry_count | INTEGER | Number of retry attempts |
-
-### `agent_call_events` — Call lifecycle events
-### `agent_call_retry_queue` — Pending retry jobs
+| `/api/planetkit-callback` | GET, POST | PlanetKit group call event callback |
 
 ---
 
