@@ -135,8 +135,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
 
     if (!config.serviceId || !config.userId || !config.accessToken) {
       toast({
-        title: "설정 오류",
-        description: "PlanetKit 설정이 올바르지 않습니다.",
+        title: "Configuration Error",
+        description: "PlanetKit configuration is invalid.",
         variant: "destructive",
       });
       return;
@@ -273,7 +273,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
           try {
             // cc_param 검증
             if (!ccParam) {
-              throw new Error('cc_param이 URL에 없습니다. notify callback에서 전달된 deeplink를 사용해주세요.');
+              throw new Error('cc_param is missing from URL. Please use the deeplink provided in the notify callback.');
             }
 
             console.log('[Agent Call] cc_param extracted from URL:', ccParam);
@@ -309,7 +309,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
             setConference(planetKitCall);
           } catch (callError: any) {
             console.error('[Agent Call] Failed to connect:', callError);
-            throw new Error(`Agent Call 연결 실패: ${callError.message}`);
+            throw new Error(`Agent Call connection failed: ${callError.message}`);
           }
 
         } else {
@@ -702,11 +702,11 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
       setConnectionStatus({
         connected: false,
         connecting: false,
-        error: error instanceof Error ? error.message : '연결 실패'
+        error: error instanceof Error ? error.message : 'Connection failed'
       });
       toast({
-        title: "연결 실패",
-        description: error instanceof Error ? error.message : "PlanetKit Conference 연결에 실패했습니다.",
+        title: "Connection Failed",
+        description: error instanceof Error ? error.message : "Failed to connect to PlanetKit Conference.",
         variant: "destructive",
       });
     }
