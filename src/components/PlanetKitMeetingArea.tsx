@@ -296,9 +296,25 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
           const planetKitConference = new PlanetKitModule.Conference();
 
           const conferenceDelegate = {
-            evtConnected: () => {
+            evtConnected: async () => {
               setConnectionStatus({ connected: true, connecting: false });
               setConnectionStartTime(new Date());
+
+              // 로컬 비디오 스트림 획득 및 표시 (SDK는 권한만 요청, 스트림 연결은 직접 해야 함)
+              try {
+                const localStream = await navigator.mediaDevices.getUserMedia({
+                  video: true,
+                  audio: false  // 오디오는 SDK가 관리
+                });
+
+                if (localVideoRef.current) {
+                  localVideoRef.current.srcObject = localStream;
+                  await localVideoRef.current.play();
+                  console.log('[PlanetKit] Local video stream connected');
+                }
+              } catch (mediaError) {
+                console.warn('[PlanetKit] Could not get local video stream:', mediaError);
+              }
 
               setParticipants([{
                 id: config.userId, // Use actual userId instead of "local" for PlanetKit event matching
