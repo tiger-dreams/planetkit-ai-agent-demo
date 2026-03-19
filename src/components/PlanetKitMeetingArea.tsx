@@ -409,6 +409,12 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
             addedPeers.forEach((peer: any) => {
               const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
 
+              // 이미 비디오 요청한 peer는 건너뛰기 (중복 요청 방지)
+              if (remoteVideoElementsRef.current.has(peerId)) {
+                console.log('[PlanetKit] Peer already has video element, skipping:', peerId);
+                return;
+              }
+
               // 비디오 엘리먼트 생성
               const videoElement = document.createElement('video');
               videoElement.autoplay = true;
@@ -461,22 +467,6 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
                 return !isRemoved;
               });
 
-              // 새로 추가된 참가자 추가
-              const newParticipants = addedPeers.map((peer: any, index: number) => {
-                const peerId = peer.userId || peer.peerId || peer.id || peer.myId || `peer-${index}`;
-                // displayName 필드명을 다양하게 시도 (PlanetKit SDK 버전에 따라 다를 수 있음)
-                const peerName = peer.displayName || peer.peerDisplayName || peer.name || peer.peerName || peer.userId || `User ${index}`;
-                const videoElement = remoteVideoElementsRef.current.get(peerId);
-
-                return {
-                  id: peerId,
-                  name: peerName,
-                  isVideoOn: peer.videoState !== undefined ? peer.videoState === 'enabled' : true,
-                  isAudioOn: peer.audioState !== undefined ? peer.audioState === 'enabled' : true,
-                  videoElement: videoElement
-                };
-              });
-
               // 로컬 참가자 + 업데이트된 원격 참가자
               const localParticipant = updated.find(p => p.id === config.userId) || {
                 id: config.userId,
@@ -488,6 +478,31 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect, mode, sessionId }: 
               };
 
               const remoteParticipants = updated.filter(p => p.id !== config.userId);
+
+              // 이미 존재하는 remote peer ID 수집
+              const existingRemotePeerIds = new Set(remoteParticipants.map(p => p.id));
+
+              // 새로 추가된 참가자 추가 (기존 peer 제외)
+              const newParticipants = addedPeers
+                .filter((peer: any) => {
+                  const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
+                  return !existingRemotePeerIds.has(peerId);
+                })
+                .map((peer: any, index: number) => {
+                  const peerId = peer.userId || peer.peerId || peer.id || peer.myId || `peer-${index}`;
+                  // displayName 필드명을 다양하게 시도 (PlanetKit SDK 버전에 따라 다를 수 있음)
+                  const peerName = peer.displayName || peer.peerDisplayName || peer.name || peer.peerName || peer.userId || `User ${index}`;
+                  const videoElement = remoteVideoElementsRef.current.get(peerId);
+
+                  return {
+                    id: peerId,
+                    name: peerName,
+                    isVideoOn: peer.videoState !== undefined ? peer.videoState === 'enabled' : true,
+                    isAudioOn: peer.audioState !== undefined ? peer.audioState === 'enabled' : true,
+                    videoElement: videoElement
+                  };
+                });
+
               return [localParticipant, ...remoteParticipants, ...newParticipants];
             });
 
