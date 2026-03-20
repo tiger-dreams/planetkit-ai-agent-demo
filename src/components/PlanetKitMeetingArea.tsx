@@ -171,22 +171,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
               console.log('[PlanetKit] evtConnected - local participant set, waiting for evtPeerListUpdated for existing peers');
 
-              // 로컬 비디오 미러링 활성화 (비디오 엘리먼트가 완전히 렌더링된 후 호출)
-              setTimeout(async () => {
-                // 비디오 미러링 적용
-                if (planetKitConference && typeof planetKitConference.setVideoMirror === 'function' && localVideoRef.current) {
-                  try {
-                    const mirrorResult = planetKitConference.setVideoMirror(true, localVideoRef.current);
-                    // Promise인지 확인하고 await
-                    if (mirrorResult && typeof mirrorResult.then === 'function') {
-                      await mirrorResult;
-                    }
-                  } catch (err: any) {
-                    // 미러링 실패는 무시
-                  }
-                }
-
-              }, 500);
+              // 로컬 비디오 미러링은 TileView에서 CSS transform으로 즉시 적용됨
 
               toast({
                 title: t.connectionSuccessTitle,

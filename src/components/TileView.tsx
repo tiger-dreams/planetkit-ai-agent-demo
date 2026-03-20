@@ -125,6 +125,10 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
           participant.videoElement.style.height = '100%';
           participant.videoElement.style.objectFit = 'cover';
           participant.videoElement.style.borderRadius = '8px';
+          // 로컬 참가자는 CSS 미러링 즉시 적용 (깜빡임 방지)
+          if (participant.isLocal) {
+            participant.videoElement.style.transform = 'scaleX(-1)';
+          }
           videoContainer.appendChild(participant.videoElement);
         }
 
