@@ -335,12 +335,13 @@ export const HeadlessAgentPage = () => {
 class AudioPlaybackProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.bufferSize = 240000; // 10 seconds buffer (24kHz * 10s) - prevents overflow on fast VM
+    this.bufferSize = 720000; // 30 seconds buffer (24kHz * 30s) - prevents overflow on long responses
     this.ringBuffer = new Float32Array(this.bufferSize);
     this.writeIndex = 0;
     this.readIndex = 0;
     this.filled = 0;
     this.hasStarted = false;  // Track if playback has started
+    this.fadeInRemaining = 0;  // Fade-in counter to avoid initial click/pop
 
     // Receive audio chunks from main thread
     this.port.onmessage = (e) => {
@@ -367,13 +368,32 @@ class AudioPlaybackProcessor extends AudioWorkletProcessor {
 
     const channel = output[0];
 
-    // Initial buffering only: wait for ~67ms (1600 samples) before first playback
+    // Initial buffering only: wait for ~200ms (4800 samples) before first playback
+    // Larger threshold reduces initial audio glitch/beep artifacts
     if (!this.hasStarted) {
-      if (this.filled < 1600) {
+      if (this.filled < 4800) {
         channel.fill(0);
         return true;
       }
       this.hasStarted = true;
+      this.fadeInRemaining = 2400; // ~100ms fade-in to avoid click/pop
+    }
+
+    // Apply fade-in to first samples after playback starts
+    if (this.fadeInRemaining > 0) {
+      for (let i = 0; i < channel.length && this.fadeInRemaining > 0; i++) {
+        if (this.filled > 0) {
+          const gain = 1.0 - (this.fadeInRemaining / 2400);
+          channel[i] = this.ringBuffer[this.readIndex] * gain;
+          this.readIndex = (this.readIndex + 1) % this.bufferSize;
+          this.filled--;
+          this.fadeInRemaining--;
+        } else {
+          channel[i] = 0;
+        }
+      }
+      if (this.fadeInRemaining <= 0) return true;
+      return true;
     }
 
     // After playback started: output silence when buffer empty, no re-buffering
