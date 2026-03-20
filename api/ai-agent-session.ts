@@ -15,10 +15,18 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 type AIProvider = 'gemini' | 'openai';
 
 // Gemini voices
+// - Aoede: Female, warm tone | Charon: Male, deep tone | Fenrir: Male, authoritative
+// - Kore: Female, bright tone | Leda: Female, gentle tone | Puck: Male, energetic
+// Recommended for zh-TW (Traditional Chinese): Leda (female), Charon (male)
+// Recommended for th (Thai): Puck (male), Aoede (female)
 const GEMINI_VOICES = ['Aoede', 'Charon', 'Fenrir', 'Kore', 'Leda', 'Puck'] as const;
 type GeminiVoice = typeof GEMINI_VOICES[number];
 
 // OpenAI voices
+// - alloy: Female, neutral | ash: Male, natural | echo: Male, warm
+// - fable: Male, British | onyx: Male, deep (deprecated) | nova: Female, friendly | shimmer: Female, soft
+// Recommended for zh-TW (Traditional Chinese): nova (female), ash (male)
+// Recommended for th (Thai): nova (female), ash (male)
 const OPENAI_VOICES = ['alloy', 'ash', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] as const;
 type OpenAIVoice = typeof OPENAI_VOICES[number];
 
