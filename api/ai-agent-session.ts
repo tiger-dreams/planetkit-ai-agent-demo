@@ -19,7 +19,7 @@ const GEMINI_VOICES = ['Aoede', 'Charon', 'Fenrir', 'Kore', 'Leda', 'Puck'] as c
 type GeminiVoice = typeof GEMINI_VOICES[number];
 
 // OpenAI voices
-const OPENAI_VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] as const;
+const OPENAI_VOICES = ['alloy', 'ash', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] as const;
 type OpenAIVoice = typeof OPENAI_VOICES[number];
 
 // Voice mapping from Gemini to OpenAI
@@ -27,7 +27,7 @@ const GEMINI_TO_OPENAI_VOICE: Record<GeminiVoice, OpenAIVoice> = {
   'Aoede': 'shimmer',
   'Charon': 'echo',
   'Fenrir': 'onyx',
-  'Kore': 'alloy',
+  'Kore': 'ash',
   'Leda': 'nova',
   'Puck': 'fable',
 };
@@ -50,11 +50,11 @@ function validateOpenAIVoice(voice: string | undefined): OpenAIVoice {
   if (voice && OPENAI_VOICES.includes(voice as OpenAIVoice)) {
     return voice as OpenAIVoice;
   }
-  return 'alloy';
+  return 'ash';
 }
 
 function mapGeminiVoiceToOpenAI(geminiVoice: GeminiVoice): OpenAIVoice {
-  return GEMINI_TO_OPENAI_VOICE[geminiVoice] || 'alloy';
+  return GEMINI_TO_OPENAI_VOICE[geminiVoice] || 'ash';
 }
 
 export default async function handler(

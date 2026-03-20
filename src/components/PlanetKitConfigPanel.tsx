@@ -405,7 +405,7 @@ export const PlanetKitConfigPanel = ({ config, onConfigChange }: PlanetKitConfig
             <div className="flex justify-between">
               <span className="text-muted-foreground">Room:</span>
               <span className="font-mono font-semibold">
-                {config.roomId ? config.roomId.charAt(0).toUpperCase() + config.roomId.slice(1) : '미선택'}
+                {config.roomId || '미선택'}
               </span>
             </div>
             <div className="flex justify-between">

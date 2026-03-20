@@ -962,7 +962,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
           <div className="bg-card rounded-lg p-6 max-w-sm w-full space-y-4 border border-border">
             <div className="text-center space-y-2">
               <h2 className="text-xl font-semibold text-foreground">
-                {config.roomId ? `${config.roomId.charAt(0).toUpperCase() + config.roomId.slice(1)} Room` : (language === 'ko' ? 'PlanetKit 회의' : 'PlanetKit Meeting')}
+                {config.roomId ? `${config.roomId} Room` : (language === 'ko' ? 'PlanetKit 회의' : 'PlanetKit Meeting')}
               </h2>
               <p className="text-sm text-muted-foreground">
                 {connectionStatus.connecting ? t.connecting : (language === 'ko' ? '회의에 참여하시겠습니까?' : 'Would you like to join the meeting?')}
