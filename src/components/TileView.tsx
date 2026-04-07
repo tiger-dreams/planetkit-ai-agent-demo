@@ -183,7 +183,7 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
                   variant="secondary"
                   className="text-xs bg-black/60 text-white border-none"
                 >
-                  {participant.isLocal ? t.you : participant.name}
+                  {participant.isLocal ? `${participant.name} (${t.you})` : participant.name}
                 </Badge>
                 
                 {participant.isScreenSharing && (

@@ -1033,7 +1033,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
           {/* 하단 컨트롤 */}
           <div className="fixed bottom-0 left-0 right-0 z-20 bg-black/70 backdrop-blur-sm border-t border-white/10">
-            <div className="flex items-center justify-center gap-3 px-4 py-6">
+            <div className="flex items-center justify-evenly w-full px-2 py-4">
               {/* 비디오 토글 */}
               <Button
                 onClick={toggleVideo}
