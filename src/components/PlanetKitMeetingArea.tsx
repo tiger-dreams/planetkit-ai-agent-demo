@@ -1152,12 +1152,12 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
           {/* Bottom controls */}
           <div className="fixed bottom-0 left-0 right-0 z-20 bg-black/70 backdrop-blur-sm border-t border-white/10">
-            <div className="flex items-center justify-evenly w-full px-2 py-4">
+            <div className="flex items-center justify-evenly w-full px-2 py-3">
               {/* Video toggle */}
               <Button
                 onClick={toggleVideo}
-                size="lg"
-                className={`w-12 h-12 rounded-full ${
+                size="icon"
+                className={`w-10 h-10 rounded-full ${
                   isVideoOn
                     ? 'bg-white/20 hover:bg-white/30 text-white'
                     : 'bg-red-600 hover:bg-red-700 text-white'
@@ -1173,8 +1173,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               {/* Microphone toggle */}
               <Button
                 onClick={toggleAudio}
-                size="lg"
-                className={`w-12 h-12 rounded-full ${
+                size="icon"
+                className={`w-10 h-10 rounded-full ${
                   isAudioOn
                     ? 'bg-white/20 hover:bg-white/30 text-white'
                     : 'bg-red-600 hover:bg-red-700 text-white'
@@ -1190,8 +1190,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               {/* Share invite link */}
               <Button
                 onClick={shareInviteUrl}
-                size="lg"
-                className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 text-white"
+                size="icon"
+                className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 text-white"
                 title={language === 'ko' ? '초대 링크 복사' : 'Copy Invite Link'}
               >
                 <Share2 className="w-5 h-5" />
@@ -1202,8 +1202,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 <Button
                   onClick={inviteAIAgent}
                   disabled={isInvitingAIAgent}
-                  size="lg"
-                  className="w-12 h-12 rounded-full bg-purple-600 hover:bg-purple-700 text-white"
+                  size="icon"
+                  className="w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-700 text-white"
                   title={language === 'ko' ? 'AI Agent 초대' : 'Invite AI Agent'}
                 >
                   {isInvitingAIAgent ? (
@@ -1217,8 +1217,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 <Button
                   onClick={kickAIAgent}
                   disabled={isKickingAIAgent}
-                  size="lg"
-                  className="w-12 h-12 rounded-full bg-orange-500 hover:bg-orange-600 text-white"
+                  size="icon"
+                  className="w-10 h-10 rounded-full bg-orange-500 hover:bg-orange-600 text-white"
                   title={language === 'ko' ? 'AI Agent 내보내기' : 'Remove AI Agent'}
                 >
                   {isKickingAIAgent ? (
@@ -1233,8 +1233,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 <Button
                   onClick={toggleAgentMode}
                   disabled={isTogglingMode}
-                  size="lg"
-                  className={`w-12 h-12 rounded-full ${
+                  size="icon"
+                  className={`w-10 h-10 rounded-full ${
                     aiAgentMode === 'listen'
                       ? 'bg-amber-500 hover:bg-amber-600 text-white'
                       : 'bg-green-600 hover:bg-green-700 text-white'
@@ -1257,8 +1257,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               {!aiAgentJoined && aiAgentSessionUsed && (
                 <Button
                   disabled
-                  size="lg"
-                  className="w-12 h-12 rounded-full"
+                  size="icon"
+                  className="w-10 h-10 rounded-full"
                   title={language === 'ko' ? 'AI Agent 세션 종료됨' : 'AI Agent session ended'}
                 >
                   <Bot className="w-5 h-5" />
@@ -1268,9 +1268,9 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               {/* Background Blur toggle (supported on WebView since 5.6) */}
               <Button
                 onClick={toggleBlur}
-                size="lg"
+                size="icon"
                 disabled={!connectionStatus.connected || isBlurToggling}
-                className={`w-12 h-12 rounded-full ${
+                className={`w-10 h-10 rounded-full ${
                   isBlurOn
                     ? 'bg-purple-500 hover:bg-purple-600 text-white'
                     : 'bg-white/20 hover:bg-white/30 text-white'
@@ -1287,9 +1287,9 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               {/* Media statistics toggle */}
               <Button
                 onClick={() => setIsStatsPanelOpen((v) => !v)}
-                size="lg"
+                size="icon"
                 disabled={!connectionStatus.connected}
-                className={`w-12 h-12 rounded-full ${
+                className={`w-10 h-10 rounded-full ${
                   isStatsPanelOpen
                     ? 'bg-blue-500 hover:bg-blue-600 text-white'
                     : 'bg-white/20 hover:bg-white/30 text-white'
@@ -1302,8 +1302,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               {/* Disconnect */}
               <Button
                 onClick={disconnect}
-                size="lg"
-                className="w-12 h-12 rounded-full bg-red-600 hover:bg-red-700 text-white"
+                size="icon"
+                className="w-10 h-10 rounded-full bg-red-600 hover:bg-red-700 text-white"
               >
                 <PhoneOff className="w-5 h-5" />
               </Button>
