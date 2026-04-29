@@ -79,8 +79,10 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
   // iOS WebKit 더블 탭 이벤트 방지 (React 상태보다 빠른 ref 기반 가드)
   const isConnectingRef = useRef(false);
 
-  // Blur canvas는 React 트리 밖에서 imperative로 관리 (JSX에 두면 reparent 시
-  // 원래 부모의 reconciliation이 깨져 stats panel 토글 시 검정화면 발생).
+  // Manage the blur canvas imperatively, outside the React tree.
+  // If kept in JSX, reparenting it later breaks the original parent's
+  // reconciliation (insertBefore: not a child) — leading to a black screen
+  // when MediaStatsPanel toggles.
   useEffect(() => {
     const canvas = document.createElement('canvas');
     canvas.style.position = 'fixed';
@@ -96,7 +98,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     };
   }, []);
 
-  // Blur ON 시 canvas를 로컬 self-tile에 overlay, OFF 시 body off-screen.
+  // Blur ON: overlay the canvas onto the local self-tile.
+  // Blur OFF: park the canvas off-screen under document.body.
   useEffect(() => {
     const canvas = blurCanvasRef.current;
     if (!canvas) return;
@@ -586,9 +589,10 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
         console.log('[PlanetKit] joinConference succeeded');
         setConference(planetKitConference);
 
-        // Virtual Background 등록 (5.6+ WebView 지원). 토글로 활성/비활성.
-        // VB 1.2.0 빌드엔 waitForVirtualBackgroundInitialization 미존재이며 README NOTE에
-        // 따라 startVirtualBackgroundBlur가 init을 자동 핸들링하므로 즉시 호출 안전.
+        // Register Virtual Background (5.6+ supports WebView). Toggled later.
+        // VB 1.2.0 build doesn't expose waitForVirtualBackgroundInitialization;
+        // per the README NOTE, startVirtualBackgroundBlur handles init internally,
+        // so calling it on demand is safe.
         try {
           const vb = new PlanetKitVirtualBackground();
           if (typeof planetKitConference.registerVirtualBackground === 'function') {
@@ -768,8 +772,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
           toast({ title: 'Blur canvas not ready', variant: 'destructive' });
           return;
         }
-        // mediaHtmlElement.myVideo로 SDK가 videoElement를 인식하더라도 일부 환경에서
-        // 누락 가능 → 토글 시점에 명시적으로 등록.
+        // Even with mediaHtmlElement.myVideo set, some environments may leave the
+        // SDK's internal videoElement unset — bind it explicitly at toggle time.
         if (typeof conference.changeVirtualBackgroundVideoElement === 'function' && localVideoRef.current) {
           conference.changeVirtualBackgroundVideoElement(localVideoRef.current);
         }
@@ -1142,7 +1146,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
           <div className="absolute top-[52px] bottom-[100px] left-0 right-0 w-full">
             <TileView participants={tileParticipants} />
 
-            {/* Media Statistics Panel — SDK raw 필드 그대로 노출 */}
+            {/* Media Statistics Panel — exposes SDK raw fields as-is */}
             <MediaStatsPanel conference={conference} enabled={isStatsPanelOpen && connectionStatus.connected} />
           </div>
 
@@ -1261,7 +1265,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 </Button>
               )}
 
-              {/* Background Blur 토글 (5.6 WebView 지원) */}
+              {/* Background Blur toggle (supported on WebView since 5.6) */}
               <Button
                 onClick={toggleBlur}
                 size="lg"
@@ -1280,7 +1284,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 )}
               </Button>
 
-              {/* Media stats 토글 */}
+              {/* Media statistics toggle */}
               <Button
                 onClick={() => setIsStatsPanelOpen((v) => !v)}
                 size="lg"

@@ -53,8 +53,9 @@ export const MediaStatsPanel = ({ conference, enabled }: MediaStatsPanelProps) =
         setError("getCurrentStats API not available on this SDK build");
         return;
       }
-      // SDK 내부 버그 방어: session 없을 때 wtpGetStats가 `new Promise.reject(...)`
-      // (잘못된 SDK 코드)로 동기 throw. 또한 반환값이 thenable이 아닐 가능성도 처리.
+      // Defensive against SDK bug: when no session, wtpGetStats hits a buggy
+      // `new Promise.reject(...)` (Promise.reject is not a constructor) and
+      // throws synchronously. Also handle non-thenable return values.
       let result: unknown;
       try {
         result = conference.getCurrentStats();

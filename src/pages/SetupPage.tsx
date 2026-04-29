@@ -777,7 +777,7 @@ Status: ${debugInfo.status}`;
             </p>
           </div>
 
-          {/* SDK 버전 정보 */}
+          {/* SDK version footer */}
           <div className="text-center text-[10px] text-muted-foreground/70 font-mono pb-2">
             WebPlanetKit {SDK_VERSIONS.planetKit} · VirtualBackground {SDK_VERSIONS.virtualBackground}
           </div>

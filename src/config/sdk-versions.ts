@@ -1,5 +1,5 @@
-// SDK 버전 정보 - package.json의 dependencies에서 추출
-// Vite는 JSON import를 자동 지원
+// SDK version info — extracted from package.json dependencies
+// Vite supports JSON imports natively
 import pkg from '../../package.json';
 
 const stripCaret = (v?: string) => (v ?? '').replace(/^[\^~]/, '');
