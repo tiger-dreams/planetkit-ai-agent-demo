@@ -7,6 +7,8 @@ import {
   VideoOff,
   PhoneOff,
   Activity,
+  BarChart3,
+  Sparkles,
   Clock,
   Users,
   Share2,
@@ -20,6 +22,7 @@ import { PlanetKitConfig, ConnectionStatus, Participant, AIProvider } from "@/ty
 import { useVideoSDK } from "@/contexts/VideoSDKContext";
 import { useToast } from "@/hooks/use-toast";
 import { TileView, TileParticipant } from "@/components/TileView";
+import { MediaStatsPanel } from "@/components/MediaStatsPanel";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTranslations } from "@/utils/translations";
 import { LanguageSelector } from "@/components/LanguageSelector";
@@ -28,6 +31,7 @@ import { InviteUserDialog } from "@/components/InviteUserDialog";
 // PlanetKit 환경별 빌드 import
 import * as PlanetKitReal from "@line/planet-kit";
 import * as PlanetKitEval from "@line/planet-kit/dist/planet-kit-eval";
+import PlanetKitVirtualBackground from "@line/planet-kit-virtual-background";
 import { LANGUAGE_VOICE_MAP } from "@/config/ai-agent-languages";
 import type { AgentLanguage } from "@/config/ai-agent-languages";
 
@@ -60,6 +64,11 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
   const [aiAgentMode, setAiAgentMode] = useState<'respond' | 'listen'>('respond');
   const [isTogglingMode, setIsTogglingMode] = useState(false);
   const [isAIAgentInviter, setIsAIAgentInviter] = useState(false);
+  const [isStatsPanelOpen, setIsStatsPanelOpen] = useState(false);
+  const [isBlurOn, setIsBlurOn] = useState(false);
+  const [isBlurToggling, setIsBlurToggling] = useState(false);
+  const virtualBackgroundRef = useRef<any>(null);
+  const blurCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // 비디오 엘리먼트 refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -69,6 +78,60 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
   const remoteVideoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   // iOS WebKit 더블 탭 이벤트 방지 (React 상태보다 빠른 ref 기반 가드)
   const isConnectingRef = useRef(false);
+
+  // Blur canvas는 React 트리 밖에서 imperative로 관리 (JSX에 두면 reparent 시
+  // 원래 부모의 reconciliation이 깨져 stats panel 토글 시 검정화면 발생).
+  useEffect(() => {
+    const canvas = document.createElement('canvas');
+    canvas.style.position = 'fixed';
+    canvas.style.top = '-9999px';
+    canvas.style.left = '-9999px';
+    canvas.style.width = '1px';
+    canvas.style.height = '1px';
+    document.body.appendChild(canvas);
+    blurCanvasRef.current = canvas;
+    return () => {
+      canvas.parentElement?.removeChild(canvas);
+      blurCanvasRef.current = null;
+    };
+  }, []);
+
+  // Blur ON 시 canvas를 로컬 self-tile에 overlay, OFF 시 body off-screen.
+  useEffect(() => {
+    const canvas = blurCanvasRef.current;
+    if (!canvas) return;
+    const localTile = document.querySelector(
+      `[data-participant-id="${config.userId}"] .video-container`
+    ) as HTMLElement | null;
+
+    if (isBlurOn && localTile) {
+      canvas.style.position = 'absolute';
+      canvas.style.top = '0';
+      canvas.style.left = '0';
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.style.objectFit = 'cover';
+      canvas.style.zIndex = '5';
+      canvas.style.transform = 'scaleX(-1)';
+      canvas.style.borderRadius = '8px';
+      if (canvas.parentElement !== localTile) {
+        localTile.appendChild(canvas);
+      }
+    } else {
+      canvas.style.position = 'fixed';
+      canvas.style.top = '-9999px';
+      canvas.style.left = '-9999px';
+      canvas.style.width = '1px';
+      canvas.style.height = '1px';
+      canvas.style.zIndex = '';
+      canvas.style.transform = '';
+      canvas.style.borderRadius = '';
+      canvas.style.objectFit = '';
+      if (canvas.parentElement !== document.body) {
+        document.body.appendChild(canvas);
+      }
+    }
+  }, [isBlurOn, config.userId, participants]);
 
   // 페이지 타이틀 업데이트
   useEffect(() => {
@@ -506,7 +569,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
           roomServiceId: config.serviceId,
           accessToken: config.accessToken,
           mediaType: "video",
-          mediaHtmlElement: { roomAudio: audioElementRef.current, localVideo: localVideoRef.current },
+          mediaHtmlElement: { roomAudio: audioElementRef.current, myVideo: localVideoRef.current },
           delegate: conferenceDelegate,
           enableTalkingStatusEvent: true // Enable speaking indicator events
         };
@@ -516,12 +579,26 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
           roomId: conferenceParams.roomId,
           myServiceId: conferenceParams.myServiceId,
           mediaType: conferenceParams.mediaType,
-          hasLocalVideo: !!conferenceParams.mediaHtmlElement?.localVideo,
+          hasLocalVideo: !!conferenceParams.mediaHtmlElement?.myVideo,
           hasRoomAudio: !!conferenceParams.mediaHtmlElement?.roomAudio,
         });
         await planetKitConference.joinConference(conferenceParams);
         console.log('[PlanetKit] joinConference succeeded');
         setConference(planetKitConference);
+
+        // Virtual Background 등록 (5.6+ WebView 지원). 토글로 활성/비활성.
+        // VB 1.2.0 빌드엔 waitForVirtualBackgroundInitialization 미존재이며 README NOTE에
+        // 따라 startVirtualBackgroundBlur가 init을 자동 핸들링하므로 즉시 호출 안전.
+        try {
+          const vb = new PlanetKitVirtualBackground();
+          if (typeof planetKitConference.registerVirtualBackground === 'function') {
+            planetKitConference.registerVirtualBackground(vb);
+            virtualBackgroundRef.current = vb;
+            console.log('[PlanetKit] VirtualBackground registered');
+          }
+        } catch (e) {
+          console.warn('[PlanetKit] VirtualBackground register failed', e);
+        }
       }; // attemptJoin 함수 끝
 
     // 환경은 항상 'eval' (기본값)
@@ -669,6 +746,41 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
       } catch (error) {
         // 비디오 토글 실패는 무시
       }
+    }
+  };
+
+  const toggleBlur = async () => {
+    if (!connectionStatus.connected || !conference || isBlurToggling) return;
+    if (!virtualBackgroundRef.current) {
+      toast({ title: 'Virtual Background not ready', variant: 'destructive' });
+      return;
+    }
+    setIsBlurToggling(true);
+    try {
+      if (isBlurOn) {
+        if (typeof conference.stopVirtualBackground === 'function') {
+          await conference.stopVirtualBackground();
+        }
+        setIsBlurOn(false);
+      } else {
+        const canvas = blurCanvasRef.current;
+        if (!canvas) {
+          toast({ title: 'Blur canvas not ready', variant: 'destructive' });
+          return;
+        }
+        // mediaHtmlElement.myVideo로 SDK가 videoElement를 인식하더라도 일부 환경에서
+        // 누락 가능 → 토글 시점에 명시적으로 등록.
+        if (typeof conference.changeVirtualBackgroundVideoElement === 'function' && localVideoRef.current) {
+          conference.changeVirtualBackgroundVideoElement(localVideoRef.current);
+        }
+        await conference.startVirtualBackgroundBlur(canvas, 15);
+        setIsBlurOn(true);
+      }
+    } catch (e: any) {
+      console.error('[PlanetKit] toggleBlur failed', e);
+      toast({ title: `Blur toggle failed: ${e?.message ?? e}`, variant: 'destructive' });
+    } finally {
+      setIsBlurToggling(false);
     }
   };
 
@@ -1029,6 +1141,9 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
           {/* 비디오 그리드 */}
           <div className="absolute top-[52px] bottom-[100px] left-0 right-0 w-full">
             <TileView participants={tileParticipants} />
+
+            {/* Media Statistics Panel — SDK raw 필드 그대로 노출 */}
+            <MediaStatsPanel conference={conference} enabled={isStatsPanelOpen && connectionStatus.connected} />
           </div>
 
           {/* 하단 컨트롤 */}
@@ -1145,6 +1260,40 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                   <Bot className="w-5 h-5" />
                 </Button>
               )}
+
+              {/* Background Blur 토글 (5.6 WebView 지원) */}
+              <Button
+                onClick={toggleBlur}
+                size="lg"
+                disabled={!connectionStatus.connected || isBlurToggling}
+                className={`w-12 h-12 rounded-full ${
+                  isBlurOn
+                    ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                    : 'bg-white/20 hover:bg-white/30 text-white'
+                }`}
+                title="Background Blur"
+              >
+                {isBlurToggling ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-5 h-5" />
+                )}
+              </Button>
+
+              {/* Media stats 토글 */}
+              <Button
+                onClick={() => setIsStatsPanelOpen((v) => !v)}
+                size="lg"
+                disabled={!connectionStatus.connected}
+                className={`w-12 h-12 rounded-full ${
+                  isStatsPanelOpen
+                    ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                    : 'bg-white/20 hover:bg-white/30 text-white'
+                }`}
+                title="Media Statistics"
+              >
+                <BarChart3 className="w-5 h-5" />
+              </Button>
 
               {/* 연결 해제 */}
               <Button

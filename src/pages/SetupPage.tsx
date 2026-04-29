@@ -14,6 +14,7 @@ import { getTranslations } from "@/utils/translations";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { ProfileDialog } from "@/components/ProfileDialog";
 import { ConfigurationSection } from "@/components/ConfigurationSection";
+import { SDK_VERSIONS } from "@/config/sdk-versions";
 
 // Generate random room ID in Google Meet style (xxx-yyyy-zzz)
 const generateRoomId = () => {
@@ -774,6 +775,11 @@ Status: ${debugInfo.status}`;
             <p>
               PlanetKit AI Agent Demo - LINE Video Conferencing with AI
             </p>
+          </div>
+
+          {/* SDK 버전 정보 */}
+          <div className="text-center text-[10px] text-muted-foreground/70 font-mono pb-2">
+            WebPlanetKit {SDK_VERSIONS.planetKit} · VirtualBackground {SDK_VERSIONS.virtualBackground}
           </div>
         </div>
       </div>
