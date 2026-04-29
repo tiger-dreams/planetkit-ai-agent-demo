@@ -1,11 +1,13 @@
 # PlanetKit AI Agent Demo
 
-A mobile-first LINE LIFF video conferencing application with **AI Agent** powered by Google Gemini 2.0 Live API or OpenAI Realtime API, built on **LINE PlanetKit Web SDK 5.5**.
+A mobile-first LINE LIFF video conferencing application with **AI Agent** powered by Google Gemini 2.0 Live API or OpenAI Realtime API, built on **LINE PlanetKit Web SDK 5.6** with the official Virtual Background plugin.
 
 ## Features
 
 - **LINE LIFF Integration** - Seamless LINE authentication and in-app browser support
-- **PlanetKit Web SDK 5.5** - HD group video conferencing with WebRTC
+- **PlanetKit Web SDK 5.6** - HD group video conferencing with WebRTC
+- **Virtual Background (Blur)** - One-tap on/off blur via `@line/planet-kit-virtual-background` 1.2.0. Works in WebView (5.6+). The processed canvas is overlaid onto the local self-tile so the user sees the blur effect on themselves as well as remote peers.
+- **Media Statistics Panel** - Live `getCurrentStats()` polling at 2s intervals. Displays the SDK's raw outbound/inbound × audio/video fields (packetsSent/Received, bytesSent/Received, packetsLost, jitter, fps, frameWidth/Height, fir/pli/nackCount, …) without any reinterpretation.
 - **AI Agent (Multi-Provider)** - Real-time AI assistant with support for:
   - **Google Gemini 2.0 Live API** - Default provider with 16kHz input audio
   - **OpenAI Realtime API** - Alternative provider with server-side VAD
@@ -13,7 +15,7 @@ A mobile-first LINE LIFF video conferencing application with **AI Agent** powere
 - **Listen / Respond Mode** - Toggle AI between passive listening and active conversation
 - **Agent Call (1-to-1)** - Outbound voice calls via PlanetKit Agent Call API
 - **Multi-language Support** - Korean, English, Japanese, Traditional Chinese, Thai
-- **Mobile-first UI** - Portrait-optimized adaptive video grid with touch-friendly controls
+- **Mobile-first UI** - Portrait-optimized adaptive video grid with touch-friendly controls. SDK version is shown at the bottom of the Setup screen for quick verification.
 
 ## Architecture Overview
 
@@ -173,6 +175,10 @@ POST /join-as-agent
 
 > **This demo generates PlanetKit access tokens client-side (`token-generator.ts`) for convenience. In production, tokens MUST be generated on your App Server.** Exposing API Secret in client-side code is a security risk. See [PlanetKit Documentation](https://docs.lineplanet.me) for server-side token generation guide.
 
+### `mediaHtmlElement` key — `myVideo` (not `localVideo`)
+
+The official [`ConferenceMediaHtmlElement`](https://docs.lineplanet.me/api-reference/client/web/5.6/global.html#ConferenceMediaHtmlElement) typedef defines `myVideo` and `roomAudio`. Using a non-spec key (e.g. `localVideo`) makes the SDK silently ignore it, leaving `srcObject` unset and forcing a fallback `getUserMedia()` in `evtConnected`. On Android LINE WebView this second `getUserMedia()` collides with the SDK's RTC tracks and can drop a peer who has just joined within ~1 second. This repo passes `myVideo` correctly.
+
 ### Why Windows VM (not Linux)?
 
 Linux headless Chrome (`headless: true`) breaks Web Audio API — AudioWorklet initialization fails silently. Windows VM with `headless: false` + off-screen positioning (`--window-position=-2000,0`) keeps audio fully functional.
@@ -247,7 +253,7 @@ planetkit-ai-agent-demo/
 ## Tech Stack
 
 - **Frontend**: Vite + React 18 + TypeScript + Tailwind CSS + shadcn/ui
-- **Video SDK**: LINE PlanetKit Web SDK 5.5
+- **Video SDK**: LINE PlanetKit Web SDK 5.6 + `@line/planet-kit-virtual-background` 1.2.0
 - **AI Providers**:
   - Google Gemini 2.0 Live API (WebSocket, 16kHz input)
   - OpenAI Realtime API (WebSocket, 24kHz input, server-side VAD)
