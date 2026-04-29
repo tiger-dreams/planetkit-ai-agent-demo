@@ -8,17 +8,17 @@ import { getTranslations } from "@/utils/translations";
 export interface TileParticipant extends Participant {
   videoElement?: HTMLVideoElement;
   isLocal?: boolean;
-  // 실시간 오디오 수준(0~1), 말하기 여부
+  // Real-time audio level (0–1), speaking flag
   audioLevel?: number;
   isSpeaking?: boolean;
   videoStats?: {
-    // 비디오 통계
+    // Video stats
     bitrate: number;
     frameRate: number;
     resolution: string;
     packetLoss: number;
 
-    // 추가 통계 정보
+    // Additional stats
     codecType?: string;
     sendBytes?: number;
     receiveBytes?: number;
@@ -28,18 +28,18 @@ export interface TileParticipant extends Participant {
     rtt?: number;
     bandwidth?: number;
 
-    // 네트워크 통계
+    // Network stats
     sendBandwidth?: number;
     receiveBandwidth?: number;
     totalDuration?: number;
     freezeRate?: number;
 
-    // 코덱 및 성능 통계
+    // Codec and performance stats
     encoderType?: string;
     cpuUsage?: number;
     memoryUsage?: number;
 
-    // 원시 통계 객체 (모든 정보)
+    // Raw stats object (all info)
     rawStats?: any;
   };
 }
@@ -56,17 +56,17 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
   const { language } = useLanguage();
   const t = getTranslations(language);
 
-  // 참가자 순서 정렬: 로컬(나)을 항상 첫 번째로, 나머지는 기존 순서 유지
+  // Sort participant order: always place local (you) first, keep the rest in their existing order
   const sortedParticipants = [...participants].sort((a, b) => {
     if (a.isLocal && !b.isLocal) return -1;
     if (!a.isLocal && b.isLocal) return 1;
     return 0;
   });
 
-  // 표시할 참가자 선택 (최대 4명까지, 4명 이상시 로컬 + 랜덤 3명)
+  // Select participants to display (up to 4; if more than 4, local + 3 random)
   const visibleParticipants = sortedParticipants.slice(0, maxVisibleTiles);
 
-  // 화면 비율 추적 (리사이즈 이벤트)
+  // Track viewport aspect ratio (resize event)
   useEffect(() => {
     const handleResize = () => {
       setAspectRatio(window.innerWidth / window.innerHeight);
@@ -76,66 +76,66 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 참가자 수에 따른 그리드 레이아웃 결정 (화면 비율 고려)
+  // Decide grid layout based on participant count (considering aspect ratio)
   const getGridLayout = (count: number) => {
     switch (count) {
       case 1:
-        return "grid-cols-1 grid-rows-1"; // 1x1 전체 화면
+        return "grid-cols-1 grid-rows-1"; // 1x1 fullscreen
       case 2:
-        // 화면 비율에 따라 동적으로 분할 방향 결정
-        // aspectRatio > 1: 가로가 긴 화면 (landscape) -> 좌우 분할
-        // aspectRatio <= 1: 세로가 긴 화면 (portrait) -> 상하 분할
+        // Dynamically choose split direction based on aspect ratio
+        // aspectRatio > 1: landscape -> split left/right
+        // aspectRatio <= 1: portrait -> split top/bottom
         if (aspectRatio > 1) {
-          return "grid-cols-2 grid-rows-1"; // 가로 2분할
+          return "grid-cols-2 grid-rows-1"; // Horizontal split
         } else {
-          return "grid-cols-1 grid-rows-[1fr_1fr]"; // 세로 2분할 (동일 높이)
+          return "grid-cols-1 grid-rows-[1fr_1fr]"; // Vertical split (equal heights)
         }
       case 3:
-        return "grid-cols-2 grid-rows-2"; // 2x2 (3개 타일)
+        return "grid-cols-2 grid-rows-2"; // 2x2 (3 tiles)
       case 4:
       default:
         return "grid-cols-2 grid-rows-2"; // 2x2
     }
   };
 
-  // 3명일 때 첫 번째 타일을 2칸으로 확장
+  // For 3 participants, expand the first tile across 2 columns
   const getTileSpan = (index: number, count: number) => {
     if (count === 3 && index === 0) {
-      return "col-span-2"; // 첫 번째 타일을 2칸으로 확장
+      return "col-span-2"; // Expand first tile across 2 columns
     }
     return "";
   };
 
   useEffect(() => {
-    // 비디오 엘리먼트를 각 타일에 연결
+    // Attach the video element to each tile
     visibleParticipants.forEach((participant, index) => {
       const tileElement = containerRef.current?.querySelector(`[data-participant-id="${participant.id}"]`);
       const videoContainer = tileElement?.querySelector('.video-container') as HTMLDivElement;
 
       if (videoContainer && participant.videoElement) {
-        // 기존 비디오 엘리먼트 정리
+        // Clean up existing video element
         const existingVideo = videoContainer.querySelector('video');
         if (existingVideo && existingVideo !== participant.videoElement) {
           videoContainer.removeChild(existingVideo);
         }
 
-        // 새 비디오 엘리먼트 추가
+        // Add new video element
         if (!videoContainer.contains(participant.videoElement)) {
           participant.videoElement.style.width = '100%';
           participant.videoElement.style.height = '100%';
           participant.videoElement.style.objectFit = 'cover';
           participant.videoElement.style.borderRadius = '8px';
-          // 로컬 참가자는 CSS 미러링 즉시 적용 (깜빡임 방지)
+          // Apply CSS mirroring immediately for local participant (prevents flicker)
           if (participant.isLocal) {
             participant.videoElement.style.transform = 'scaleX(-1)';
           }
           videoContainer.appendChild(participant.videoElement);
         }
 
-        // isVideoOn 상태에 따라 비디오 표시/숨김
+        // Show/hide the video element based on isVideoOn
         participant.videoElement.style.display = participant.isVideoOn ? 'block' : 'none';
       } else if (!participant.videoElement) {
-        // videoElement 없음 - 무시
+        // No videoElement — ignore
       }
     });
   }, [visibleParticipants]);
@@ -161,7 +161,7 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
           data-participant-id={participant.id}
           className={`relative bg-black rounded-lg overflow-hidden ${getTileSpan(index, visibleParticipants.length)} ${participant.isSpeaking || participant.isTalking ? 'ring-4 ring-emerald-500 shadow-lg shadow-emerald-500/50' : ''}`}
         >
-          {/* 비디오 컨테이너 */}
+          {/* Video container */}
           <div className="video-container w-full h-full relative">
             {!participant.isVideoOn && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white z-10">
@@ -175,7 +175,7 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
             )}
           </div>
 
-          {/* 참가자 정보 오버레이 */}
+          {/* Participant info overlay */}
           <div className="absolute bottom-2 left-2 right-2 flex items-end justify-between">
             <div className="flex flex-col items-start gap-1">
               <div className="flex items-center gap-1">
@@ -191,32 +191,32 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
                 )}
               </div>
               
-              {/* 비디오 품질 정보 표시 - 모든 통계 표시 */}
+              {/* Show video quality info — display all stats */}
               {showVideoStats && participant.videoStats && (
                 <div className="bg-black/90 text-white text-[9px] px-2 py-1 rounded font-mono leading-tight max-h-32 overflow-y-auto">
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                    {/* 기본 비디오 정보 */}
+                    {/* Basic video info */}
                     <div className="col-span-2 text-yellow-300 font-bold text-center mb-1">
                       📊 {participant.isLocal ? "송신" : "수신"} 통계
                     </div>
                     
-                    {/* 해상도 & FPS */}
+                    {/* Resolution & FPS */}
                     <span>해상도:</span>
                     <span className="text-cyan-300">{participant.videoStats.resolution}</span>
                     <span>FPS:</span>
                     <span className="text-cyan-300">{participant.videoStats.frameRate}</span>
                     
-                    {/* 비트레이트 */}
+                    {/* Bitrate */}
                     <span>비트레이트:</span>
                     <span className="text-green-300">{(participant.videoStats.bitrate / 1000).toFixed(0)}k</span>
                     
-                    {/* 패킷 손실 */}
+                    {/* Packet loss */}
                     <span>손실률:</span>
                     <span className={participant.videoStats.packetLoss > 5 ? "text-red-400" : "text-green-400"}>
                       {participant.videoStats.packetLoss.toFixed(1)}%
                     </span>
                     
-                    {/* 추가 통계 정보 */}
+                    {/* Additional stats */}
                     {participant.videoStats.codecType && (
                       <>
                         <span>코덱:</span>
@@ -296,9 +296,9 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
                       </>
                     )}
                     
-                    {/* 원시 통계 객체에서 추가 속성들 찾아서 표시 */}
+                    {/* Find and display additional properties from the raw stats object */}
                     {participant.videoStats.rawStats && Object.entries(participant.videoStats.rawStats).map(([key, value]) => {
-                      // 이미 표시된 속성들은 제외
+                      // Exclude properties that are already displayed
                       const displayedKeys = [
                         'sendBitrate', 'bitrate', 'sendFrameRate', 'frameRate', 
                         'sendResolutionWidth', 'width', 'sendResolutionHeight', 'height',
@@ -342,7 +342,7 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
                         }
                       };
 
-                      // 객체인 경우 하위 키들을 펼쳐서 표시
+                      // For objects, expand and display nested keys
                       if (typeof value === 'object' && !Array.isArray(value)) {
                         return (
                           <React.Fragment key={key}>
@@ -357,7 +357,7 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
                         );
                       }
 
-                      // 원시값은 단일 라인으로 표시
+                      // Render primitive values on a single line
                       return (
                         <React.Fragment key={key}>
                           <span>{key}:</span>
@@ -370,7 +370,7 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
               )}
             </div>
 
-            {/* 오디오 상태 */}
+            {/* Audio status */}
             <div className="flex items-center gap-1">
               {participant.isAudioOn ? (
                 <Mic className="w-4 h-4 text-green-400" />
@@ -380,14 +380,14 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
             </div>
           </div>
 
-          {/* 말하고 있는 상태 표시 (향후 확장) */}
+          {/* Speaking-state indicator (future expansion) */}
           {participant.isAudioOn && (
             <div className={`absolute inset-0 border-4 rounded-lg pointer-events-none transition-opacity duration-200 ${participant.isSpeaking || participant.isTalking ? 'opacity-100 border-emerald-500 shadow-lg shadow-emerald-500/50' : 'opacity-0'}`} />
           )}
         </div>
       ))}
 
-      {/* 4명 이상일 때 추가 참가자 수 표시 */}
+      {/* Show additional participant count when more than 4 */}
       {participants.length > maxVisibleTiles && (
         <div className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-1 rounded-full text-sm">
           +{participants.length - maxVisibleTiles}명 더
@@ -397,7 +397,7 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
   );
 };
 
-// 말하고 있는 상태를 표시하기 위한 유틸리티 함수 (향후 확장용)
+// Utility function for highlighting the speaking state (for future expansion)
 export const highlightSpeakingParticipant = (participantId: string) => {
   const tileElement = document.querySelector(`[data-participant-id="${participantId}"]`);
   const speakingIndicator = tileElement?.querySelector('.speaking-indicator') as HTMLElement;

@@ -15,7 +15,7 @@ const NotFound = () => {
       location.pathname
     );
 
-    // 5초 후 자동 리디렉션
+    // Auto-redirect after 5 seconds
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {

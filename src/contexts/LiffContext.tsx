@@ -36,7 +36,7 @@ export const LiffProvider = ({ children }: LiffProviderProps) => {
   const [profile, setProfile] = useState<LiffContextType['profile']>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // LIFF 초기화 함수 (외부에서도 호출 가능)
+  // LIFF initialization function (can be called externally)
   const initializeLiff = async (id: string) => {
     if (!id) {
       setError('LIFF ID is required.');
@@ -53,14 +53,14 @@ export const LiffProvider = ({ children }: LiffProviderProps) => {
       setLiffIdState(id);
       setNeedsLiffId(false);
 
-      // localStorage에 저장
+      // Save to localStorage
       localStorage.setItem('liffId', id);
 
-      // 이미 로그인되어 있는지 확인
+      // Check if already logged in
       if (liff.isLoggedIn()) {
         setIsLoggedIn(true);
 
-        // 프로필 가져오기
+        // Fetch profile
         const userProfile = await liff.getProfile();
         setProfile({
           userId: userProfile.userId,
@@ -75,31 +75,31 @@ export const LiffProvider = ({ children }: LiffProviderProps) => {
     }
   };
 
-  // LIFF ID 설정
+  // Set LIFF ID
   const setLiffId = (id: string) => {
     setLiffIdState(id);
     localStorage.setItem('liffId', id);
   };
 
-  // 최초 로드 시 LIFF 초기화 시도
+  // Attempt LIFF initialization on first load
   useEffect(() => {
     const autoInitLiff = async () => {
-      // 1. 환경 변수에서 LIFF ID 확인
+      // 1. Check LIFF ID from environment variable
       let id = import.meta.env.VITE_LIFF_ID;
 
-      // 2. 없으면 localStorage에서 확인
+      // 2. If not present, check localStorage
       if (!id) {
         id = localStorage.getItem('liffId');
       }
 
-      // 3. 둘 다 없으면 사용자 입력 필요
+      // 3. If neither, user input is required
       if (!id) {
         setNeedsLiffId(true);
-        setIsInitialized(true); // 초기화는 완료된 것으로 표시 (LIFF ID 입력 대기)
+        setIsInitialized(true); // Mark initialization as complete (waiting for LIFF ID input)
         return;
       }
 
-      // 4. LIFF ID가 있으면 자동 초기화
+      // 4. If LIFF ID exists, auto-initialize
       await initializeLiff(id);
     };
 
@@ -132,7 +132,7 @@ export const LiffProvider = ({ children }: LiffProviderProps) => {
       liff.logout();
       setIsLoggedIn(false);
       setProfile(null);
-      // 페이지 새로고침
+      // Reload the page
       window.location.reload();
     }
   };

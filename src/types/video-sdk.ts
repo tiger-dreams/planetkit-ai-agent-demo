@@ -19,10 +19,10 @@ export interface PlanetKitConfig {
   apiKey: string;
   apiSecret: string;
   userId: string;
-  displayName: string; // LINE 프로필 표시 이름
+  displayName: string; // LINE profile display name
   roomId: string;
   accessToken: string;
-  environment: 'eval' | 'real' | ''; // Evaluation vs Real 환경 선택 (빈 값 = 미선택)
+  environment: 'eval' | 'real' | ''; // Evaluation vs Real environment selection (empty = not selected)
 }
 
 export interface ConnectionStatus {

@@ -16,7 +16,7 @@ export const useMediaDevices = () => {
 
   const refreshDevices = async () => {
     try {
-      // 미디어 접근 권한 요청
+      // Request media access permission
       await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -49,7 +49,7 @@ export const useMediaDevices = () => {
       setAudioDevices(audioInputs);
       setAudioOutputDevices(audioOutputs);
 
-      // 기본 디바이스 설정
+      // Set default devices
       if (videoInputs.length > 0 && !selectedVideoDevice) {
         setSelectedVideoDevice(videoInputs[0].deviceId);
       }
@@ -67,7 +67,7 @@ export const useMediaDevices = () => {
   useEffect(() => {
     refreshDevices();
 
-    // 디바이스 변경 감지
+    // Detect device changes
     const handleDeviceChange = () => {
       refreshDevices();
     };

@@ -2,14 +2,14 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 
-// SIP.js 콘솔 로그 필터링
+// Filter SIP.js console logs
 const originalLog = console.log;
 const originalWarn = console.warn;
 const originalError = console.error;
 
 console.log = function(...args: any[]) {
   const message = args.join(' ');
-  // SIP 관련 로그 필터링
+  // Filter SIP-related logs
   if (message.includes('sip.') || message.includes('| sip')) {
     return;
   }

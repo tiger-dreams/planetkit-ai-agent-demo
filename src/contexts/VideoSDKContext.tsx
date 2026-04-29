@@ -37,7 +37,7 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
     };
   };
 
-  // PlanetKit: 환경 변수 또는 custom credentials에서 설정 로드
+  // PlanetKit: load configuration from environment variables or custom credentials
   const getDefaultPlanetKitConfig = (customCreds?: CustomPlanetKitCredentials): PlanetKitConfig => {
     // Priority: Custom credentials (if enabled) > Environment variables > defaults
     if (customCreds?.enabled) {
@@ -45,9 +45,9 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
         serviceId: customCreds.serviceId,
         apiKey: customCreds.apiKey,
         apiSecret: customCreds.apiSecret,
-        userId: '', // LINE 프로필에서 자동으로 설정됨
-        displayName: '', // LINE 프로필에서 자동으로 설정됨
-        roomId: '', // 사용자가 선택하도록 빈 값으로 시작
+        userId: '', // Auto-filled from LINE profile
+        displayName: '', // Auto-filled from LINE profile
+        roomId: '', // Start empty so user selects
         accessToken: '',
         environment: customCreds.environment
       };
@@ -58,11 +58,11 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
       serviceId: import.meta.env.VITE_PLANETKIT_EVAL_SERVICE_ID || '',
       apiKey: import.meta.env.VITE_PLANETKIT_EVAL_API_KEY || '',
       apiSecret: import.meta.env.VITE_PLANETKIT_EVAL_API_SECRET || '',
-      userId: '', // LINE 프로필에서 자동으로 설정됨
-      displayName: '', // LINE 프로필에서 자동으로 설정됨
-      roomId: '', // 사용자가 선택하도록 빈 값으로 시작
+      userId: '', // Auto-filled from LINE profile
+      displayName: '', // Auto-filled from LINE profile
+      roomId: '', // Start empty so user selects
       accessToken: '',
-      environment: '' // 사용자가 선택하도록 빈 값으로 시작
+      environment: '' // Start empty so user selects
     };
   };
 
@@ -84,7 +84,7 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
     getDefaultPlanetKitConfig()
   );
 
-  // localStorage에서 설정 복원
+  // Restore configuration from localStorage
   useEffect(() => {
     const savedPlanetKitConfig = localStorage.getItem('planetKitConfig');
     const savedSDK = localStorage.getItem('selectedSDK');
@@ -130,25 +130,25 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
           cleanedUserId = ''; // Reset to empty, will be set from LINE profile
         }
 
-        // 환경 변수가 항상 우선 (serviceId, apiKey, apiSecret)
-        // localStorage에서는 userId, displayName만 복원
+        // Environment variables always take priority (serviceId, apiKey, apiSecret)
+        // From localStorage we only restore userId and displayName
         const envServiceId = import.meta.env.VITE_PLANETKIT_EVAL_SERVICE_ID || '';
         const envApiKey = import.meta.env.VITE_PLANETKIT_EVAL_API_KEY || '';
         const envApiSecret = import.meta.env.VITE_PLANETKIT_EVAL_API_SECRET || '';
 
         setPlanetKitConfig(prev => ({
           ...prev,
-          // 환경 변수가 있으면 환경 변수 사용, 없으면 localStorage 값 사용
+          // Use environment variables if present, otherwise fall back to localStorage values
           serviceId: envServiceId || saved.serviceId || prev.serviceId,
           apiKey: envApiKey || saved.apiKey || prev.apiKey,
           apiSecret: envApiSecret || saved.apiSecret || prev.apiSecret,
           // userId: cleaned value only, LINE profile will override
           userId: cleanedUserId || prev.userId,
           displayName: saved.displayName || prev.displayName,
-          // environment는 eval로 고정
+          // environment is fixed to eval
           environment: 'eval',
           roomId: prev.roomId || '',
-          // accessToken은 복원하지 않음 (매번 새로 생성 필요)
+          // Do not restore accessToken (must be regenerated every time)
           accessToken: ''
         }));
       } catch (error) {
@@ -167,7 +167,7 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
     }
   }, []);
 
-  // 설정 변경 시 localStorage에 저장
+  // Save to localStorage when configuration changes
   useEffect(() => {
     localStorage.setItem('planetKitConfig', JSON.stringify(planetKitConfig));
   }, [planetKitConfig]);
@@ -180,7 +180,7 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
     localStorage.setItem('aiProvider', aiProvider);
   }, [aiProvider]);
 
-  // Custom credentials 변경 시 localStorage 저장 및 planetKitConfig 업데이트
+  // When custom credentials change, save to localStorage and update planetKitConfig
   useEffect(() => {
     localStorage.setItem('customPlanetKitCredentials', JSON.stringify(customCredentials));
     setFeatureAvailability(calculateFeatureAvailability(customCredentials));
@@ -209,7 +209,7 @@ export const VideoSDKProvider = ({ children }: VideoSDKProviderProps) => {
     }
   }, [customCredentials]);
 
-  // 설정이 완료되었는지 확인
+  // Check whether configuration is complete
   const isConfigured = !!(
     planetKitConfig.serviceId &&
     planetKitConfig.apiKey &&

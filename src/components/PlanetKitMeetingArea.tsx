@@ -28,7 +28,7 @@ import { getTranslations } from "@/utils/translations";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useLiff } from "@/contexts/LiffContext";
 import { InviteUserDialog } from "@/components/InviteUserDialog";
-// PlanetKit 환경별 빌드 import
+// Import per-environment PlanetKit builds
 import * as PlanetKitReal from "@line/planet-kit";
 import * as PlanetKitEval from "@line/planet-kit/dist/planet-kit-eval";
 import PlanetKitVirtualBackground from "@line/planet-kit-virtual-background";
@@ -70,13 +70,13 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
   const virtualBackgroundRef = useRef<any>(null);
   const blurCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // 비디오 엘리먼트 refs
+  // Video element refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const audioElementRef = useRef<HTMLAudioElement>(null);
   const [conference, setConference] = useState<any>(null);
-  // 원격 참가자 비디오 엘리먼트 맵
+  // Map of remote participant video elements
   const remoteVideoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
-  // iOS WebKit 더블 탭 이벤트 방지 (React 상태보다 빠른 ref 기반 가드)
+  // Prevent iOS WebKit double-tap events (ref-based guard, faster than React state)
   const isConnectingRef = useRef(false);
 
   // Manage the blur canvas imperatively, outside the React tree.
@@ -136,7 +136,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     }
   }, [isBlurOn, config.userId, participants]);
 
-  // 페이지 타이틀 업데이트
+  // Update page title
   useEffect(() => {
     if (connectionStatus.connected) {
       document.title = language === 'ko'
@@ -147,7 +147,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     }
   }, [language, connectionStatus.connected]);
 
-  // 통화 시간 업데이트
+  // Update call duration
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
@@ -174,13 +174,13 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
   // Note: Local user talking status is now handled by PlanetKit's evtMyTalkingStatusUpdated event
   // No need for manual AudioContext monitoring
 
-  // PlanetKit Conference 연결
+  // Connect to PlanetKit Conference
   const connectToConference = async () => {
-    // iOS WebKit 더블 탭 방지: React 상태 업데이트보다 빠른 ref 기반 가드
+    // Prevent iOS WebKit double-tap: ref-based guard, faster than React state updates
     if (isConnectingRef.current) return;
     isConnectingRef.current = true;
 
-    try { // finally에서 isConnectingRef.current = false 보장
+    try { // ensure isConnectingRef.current = false in finally
 
     if (!config.serviceId || !config.userId || !config.accessToken) {
       toast({
@@ -196,12 +196,12 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
     setConnectionStatus({ connected: false, connecting: true });
 
-    // PlanetKit SDK가 joinConference 시 미디어 스트림을 직접 관리함
-    // 별도의 getUserMedia 호출 불필요 (중복 권한 요청 방지)
+    // The PlanetKit SDK manages media streams directly during joinConference
+    // No separate getUserMedia call needed (avoids duplicate permission prompts)
 
     try {
       const attemptJoin = async (PlanetKitModule: any, envLabel: 'eval' | 'real') => {
-        // Conference 방식 (Group Call)
+        // Conference flow (Group Call)
         const planetKitConference = new PlanetKitModule.Conference();
 
           const conferenceDelegate = {
@@ -209,11 +209,11 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               setConnectionStatus({ connected: true, connecting: false });
               setConnectionStartTime(new Date());
 
-              // 로컬 비디오 스트림 획득 및 표시 (SDK는 권한만 요청, 스트림 연결은 직접 해야 함)
+              // Acquire and display the local video stream (SDK only requests permission; we attach the stream ourselves)
               try {
                 const localStream = await navigator.mediaDevices.getUserMedia({
                   video: true,
-                  audio: false  // 오디오는 SDK가 관리
+                  audio: false  // Audio is managed by the SDK
                 });
 
                 if (localVideoRef.current) {
@@ -225,7 +225,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 console.warn('[PlanetKit] Could not get local video stream:', mediaError);
               }
 
-              // 로컬 참가자만 초기화 (기존 참여자는 evtPeerListUpdated에서 처리)
+              // Initialize only the local participant (existing peers are handled in evtPeerListUpdated)
               setParticipants([{
                 id: config.userId,
                 name: config.displayName || config.userId,
@@ -237,7 +237,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
               console.log('[PlanetKit] evtConnected - local participant set, waiting for evtPeerListUpdated for existing peers');
 
-              // 로컬 비디오 미러링은 TileView에서 CSS transform으로 즉시 적용됨
+              // Local video mirroring is applied immediately via CSS transform in TileView
 
               toast({
                 title: t.connectionSuccessTitle,
@@ -246,7 +246,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             },
 
             evtDisconnected: (disconnectDetails: any) => {
-              // 로컬 미디어 스트림 정리 (카메라/마이크 끄기)
+              // Clean up local media streams (turn off camera/mic)
               if (localVideoRef.current && localVideoRef.current.srcObject) {
                 const stream = localVideoRef.current.srcObject as MediaStream;
                 stream.getTracks().forEach(track => {
@@ -255,7 +255,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 localVideoRef.current.srcObject = null;
               }
 
-              // 원격 비디오 엘리먼트 정리
+              // Clean up remote video elements
               remoteVideoElementsRef.current.clear();
 
               setConnectionStatus({ connected: false, connecting: false });
@@ -270,7 +270,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             },
 
           evtPeerListUpdated: (peerUpdateInfo: any) => {
-            // PlanetKit은 addedPeers, removedPeers 배열을 제공
+            // PlanetKit provides addedPeers and removedPeers arrays
             const addedPeers = peerUpdateInfo.addedPeers || [];
             const removedPeers = peerUpdateInfo.removedPeers || [];
             const totalPeersCount = peerUpdateInfo.totalPeersCount || 0;
@@ -282,20 +282,20 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               currentRemoteVideoRefs: Array.from(remoteVideoElementsRef.current.keys())
             });
 
-            // 제거된 peer 처리
+            // Handle removed peers
             removedPeers.forEach((peer: any) => {
               const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
 
-              // PlanetKit에 비디오 제거 요청
+              // Request PlanetKit to remove the peer's video
               if (planetKitConference && typeof planetKitConference.removePeerVideo === 'function') {
                 try {
                   planetKitConference.removePeerVideo({ peerId: peerId });
                 } catch (err) {
-                  // 비디오 제거 실패는 무시
+                  // Ignore video removal failures
                 }
               }
 
-              // 비디오 엘리먼트 정리
+              // Clean up the video element
               const videoElement = remoteVideoElementsRef.current.get(peerId);
               if (videoElement) {
                 if (videoElement.srcObject) {
@@ -310,17 +310,17 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               }
             });
 
-            // 새로 추가된 peer에 대해 비디오 요청
+            // Request video for newly added peers
             addedPeers.forEach((peer: any) => {
               const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
 
-              // 이미 비디오 요청한 peer는 건너뛰기 (중복 요청 방지)
+              // Skip peers we've already requested video for (avoids duplicate requests)
               if (remoteVideoElementsRef.current.has(peerId)) {
                 console.log('[PlanetKit] Peer already has video element, skipping:', peerId);
                 return;
               }
 
-              // 비디오 엘리먼트 생성
+              // Create the video element
               const videoElement = document.createElement('video');
               videoElement.autoplay = true;
               videoElement.playsInline = true;
@@ -330,7 +330,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               videoElement.style.objectFit = 'cover';
               videoElement.style.backgroundColor = '#000';
 
-              // PlanetKit에 비디오 요청
+              // Request video from PlanetKit
               if (planetKitConference && typeof planetKitConference.requestPeerVideo === 'function') {
                 try {
                   planetKitConference.requestPeerVideo({
@@ -342,15 +342,15 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                   remoteVideoElementsRef.current.set(peerId, videoElement);
 
                   videoElement.onerror = () => {
-                    // 비디오 에러는 무시
+                    // Ignore video errors
                   };
                 } catch (err) {
-                  // 비디오 요청 실패는 무시
+                  // Ignore video request failures
                 }
               }
             });
 
-            // AI Agent 퇴장 감지
+            // Detect AI Agent leaving
             const removedAIAgent = removedPeers.find((peer: any) => {
               const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
               return peerId && peerId.includes('AI_HEADLESS_');
@@ -359,11 +359,11 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               setAiAgentJoined(false);
               setAiAgentMode('respond');
               setIsAIAgentInviter(false);
-              setAiAgentSessionUsed(true); // 세션 1회 소진 → 재초대 불가
+              setAiAgentSessionUsed(true); // Session consumed once — cannot re-invite
             }
 
             setParticipants(prev => {
-              // 기존 참가자 목록에서 제거된 참가자 삭제
+              // Remove participants that have been removed from the existing list
               let updated = prev.filter(p => {
                 const isRemoved = removedPeers.some((removedPeer: any) => {
                   const removedPeerId = removedPeer.userId || removedPeer.peerId || removedPeer.id || removedPeer.myId;
@@ -372,7 +372,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 return !isRemoved;
               });
 
-              // 로컬 참가자 + 업데이트된 원격 참가자
+              // Local participant + updated remote participants
               const localParticipant = updated.find(p => p.id === config.userId) || {
                 id: config.userId,
                 name: config.displayName || config.userId,
@@ -384,10 +384,10 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
               const remoteParticipants = updated.filter(p => p.id !== config.userId);
 
-              // 이미 존재하는 remote peer ID 수집
+              // Collect IDs of remote peers that already exist
               const existingRemotePeerIds = new Set(remoteParticipants.map(p => p.id));
 
-              // 새로 추가된 참가자 추가 (기존 peer 제외)
+              // Add newly added participants (excluding existing peers)
               const newParticipants = addedPeers
                 .filter((peer: any) => {
                   const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
@@ -395,7 +395,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 })
                 .map((peer: any, index: number) => {
                   const peerId = peer.userId || peer.peerId || peer.id || peer.myId || `peer-${index}`;
-                  // displayName 필드명을 다양하게 시도 (PlanetKit SDK 버전에 따라 다를 수 있음)
+                  // Try various displayName field names (may differ across PlanetKit SDK versions)
                   const peerName = peer.displayName || peer.peerDisplayName || peer.name || peer.peerName || peer.userId || `User ${index}`;
                   const videoElement = remoteVideoElementsRef.current.get(peerId);
 
@@ -411,7 +411,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               return [localParticipant, ...remoteParticipants, ...newParticipants];
             });
 
-            // AI Agent 참가 감지
+            // Detect AI Agent joining
             const aiAgent = addedPeers.find((peer: any) => {
               const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
               return peerId && peerId.includes('AI_HEADLESS_');
@@ -448,13 +448,13 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             });
           },
 
-          // 비디오 일시정지 이벤트
+          // Video pause event
           evtPeersVideoPaused: (peerInfoArray: any) => {
             console.log('[REMOTE VIDEO] evtPeersVideoPaused called:', peerInfoArray);
             const peers = Array.isArray(peerInfoArray) ? peerInfoArray : [peerInfoArray];
 
             peers.forEach((peerInfo: any) => {
-              // evtPeersVideoPaused의 구조: {peer: {userId, ...}, pauseReason: ...}
+              // evtPeersVideoPaused structure: {peer: {userId, ...}, pauseReason: ...}
               const peer = peerInfo.peer || peerInfo;
               const peerId = peer.userId || peer.peerId || peer.id;
               console.log('[REMOTE VIDEO] Peer video paused, peerId:', peerId);
@@ -473,7 +473,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             });
           },
 
-          // 비디오 재개 이벤트
+          // Video resume event
           evtPeersVideoResumed: (peerInfoArray: any) => {
             console.log('[REMOTE VIDEO] evtPeersVideoResumed called:', peerInfoArray);
             const peers = Array.isArray(peerInfoArray) ? peerInfoArray : [peerInfoArray];
@@ -496,7 +496,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             });
           },
 
-          // 마이크 음소거 이벤트
+          // Microphone mute event
           evtPeersMicMuted: (peerInfoArray: any) => {
             const peers = Array.isArray(peerInfoArray) ? peerInfoArray : [peerInfoArray];
 
@@ -512,7 +512,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             });
           },
 
-          // 마이크 음소거 해제 이벤트
+          // Microphone unmute event
           evtPeersMicUnmuted: (peerInfoArray: any) => {
             const peers = Array.isArray(peerInfoArray) ? peerInfoArray : [peerInfoArray];
 
@@ -528,7 +528,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             });
           },
 
-          // 로컬 사용자(나 자신)의 말하는 상태 업데이트 (Issue #10: Speaking indicator)
+          // Update talking status for the local user (Issue #10: Speaking indicator)
           evtMyTalkingStatusUpdated: (isActive: boolean) => {
 
             setParticipants(prev => prev.map(p => {
@@ -539,7 +539,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             }));
           },
 
-          // 원격 참가자들의 말하는 상태 업데이트 이벤트 (Issue #10: Speaking indicator)
+          // Talking status update event for remote participants (Issue #10: Speaking indicator)
           evtPeersTalkingStatusUpdated: (talkingInfoArray: any) => {
             const talkingPeers = Array.isArray(talkingInfoArray) ? talkingInfoArray : [talkingInfoArray];
 
@@ -603,9 +603,9 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
         } catch (e) {
           console.warn('[PlanetKit] VirtualBackground register failed', e);
         }
-      }; // attemptJoin 함수 끝
+      }; // end of attemptJoin function
 
-    // 환경은 항상 'eval' (기본값)
+    // Environment is always 'eval' (default)
     const environment = config.environment || 'eval';
     const PlanetKitModule = environment === 'eval' ? PlanetKitEval : PlanetKitReal;
     await attemptJoin(PlanetKitModule, environment);
@@ -645,10 +645,10 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     }
   };
 
-  // Conference 연결 해제
+  // Disconnect from Conference
   const disconnect = async () => {
     try {
-      // 로컬 미디어 스트림 정리 (카메라/마이크 끄기)
+      // Clean up local media streams (turn off camera/mic)
       if (localVideoRef.current && localVideoRef.current.srcObject) {
         const stream = localVideoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => {
@@ -657,20 +657,20 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
         localVideoRef.current.srcObject = null;
       }
 
-      // Conference 연결 해제
+      // Disconnect from the Conference
       if (conference && typeof conference.leaveConference === 'function') {
         try {
           await conference.leaveConference();
         } catch (leaveError) {
-          // Conference 해제 오류는 무시
+          // Ignore Conference leave errors
         }
         setConference(null);
       }
 
-      // 원격 비디오 엘리먼트 정리
+      // Clean up remote video elements
       remoteVideoElementsRef.current.clear();
 
-      // 상태 초기화
+      // Reset state
       setConnectionStatus({ connected: false, connecting: false });
       setParticipants([]);
       setConnectionStartTime(null);
@@ -681,54 +681,54 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
         description: t.callEndedDescription,
       });
 
-      // 페이지 리디렉션
+      // Redirect the page
       if (onDisconnect) {
         setTimeout(() => onDisconnect(), 500);
       }
     } catch (error) {
-      // Conference 연결 해제 오류는 무시
+      // Ignore Conference disconnect errors
     }
   };
 
-  // 마이크 토글
+  // Toggle microphone
   const toggleAudio = async () => {
     if (connectionStatus.connected) {
       try {
         const newAudioState = !isAudioOn;
 
-        // PlanetKit API: muteMyAudio(isMuted) - true면 음소거, false면 음소거 해제
+        // PlanetKit API: muteMyAudio(isMuted) - true to mute, false to unmute
         if (conference && typeof conference.muteMyAudio === 'function') {
           await conference.muteMyAudio(!newAudioState);
         }
 
         setIsAudioOn(newAudioState);
 
-        // 로컬 참가자 상태 업데이트
+        // Update local participant state
         setParticipants(prev => prev.map(p =>
           p.id === config.userId ? { ...p, isAudioOn: newAudioState } : p
         ));
       } catch (error) {
-        // 마이크 토글 실패는 무시
+        // Ignore microphone toggle failures
       }
     }
   };
 
-  // 비디오 토글
+  // Toggle video
   const toggleVideo = async () => {
     if (connectionStatus.connected) {
       try {
         const newVideoState = !isVideoOn;
 
-        // 직접 MediaStream track 제어 (실제 비디오 전송 중단/재개)
+        // Directly control MediaStream tracks (actually stop/resume video transmission)
         if (localVideoRef.current && localVideoRef.current.srcObject) {
           const stream = localVideoRef.current.srcObject as MediaStream;
           const videoTracks = stream.getVideoTracks();
           videoTracks.forEach(track => {
-            track.enabled = newVideoState; // true면 켜기, false면 끄기
+            track.enabled = newVideoState; // true to enable, false to disable
           });
         }
 
-        // PlanetKit API도 호출 (SDK 내부 상태 동기화)
+        // Also call the PlanetKit API (sync internal SDK state)
         if (conference) {
           if (newVideoState) {
             if (typeof conference.resumeMyVideo === 'function') {
@@ -743,12 +743,12 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
         setIsVideoOn(newVideoState);
 
-        // 로컬 참가자 상태 업데이트
+        // Update local participant state
         setParticipants(prev => prev.map(p =>
           p.id === config.userId ? { ...p, isVideoOn: newVideoState } : p
         ));
       } catch (error) {
-        // 비디오 토글 실패는 무시
+        // Ignore video toggle failures
       }
     }
   };
@@ -788,7 +788,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     }
   };
 
-  // 초대 링크 공유 (통화 이력 사용자 선택)
+  // Share invite link (select user from call history)
   const shareInviteUrl = () => {
     if (!config.roomId || !liffId) {
       toast({
@@ -808,11 +808,11 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
       return;
     }
 
-    // 통화 이력 사용자 선택 다이얼로그 열기
+    // Open the call-history user selection dialog
     setInviteDialogOpen(true);
   };
 
-  // AI Agent 초대 핸들러
+  // AI Agent invite handler
   const inviteAIAgent = async () => {
     if (!config.roomId) {
       toast({
@@ -916,7 +916,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     }
   };
 
-  // AI Agent 모드 전환 핸들러 (듣기/응답)
+  // AI Agent mode toggle handler (listen/respond)
   const toggleAgentMode = async () => {
     if (!config.roomId || isTogglingMode) return;
 
@@ -959,10 +959,10 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     }
   };
 
-  // 컴포넌트 언마운트 시 정리
+  // Cleanup on component unmount
   useEffect(() => {
     return () => {
-      // 로컬 미디어 스트림 정리
+      // Clean up local media streams
       if (localVideoRef.current && localVideoRef.current.srcObject) {
         const stream = localVideoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => {
@@ -971,43 +971,43 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
         localVideoRef.current.srcObject = null;
       }
 
-      // Conference 정리
+      // Clean up the Conference
       const currentConference = conference;
       if (currentConference && typeof currentConference.leaveConference === 'function') {
         try {
           currentConference.leaveConference().catch(() => {
-            // 언마운트 시 Conference 해제 오류는 무시
+            // Ignore Conference leave errors during unmount
           });
         } catch (error) {
-          // 언마운트 시 Conference 해제 오류는 무시
+          // Ignore Conference leave errors during unmount
         }
       }
 
-      // 원격 비디오 엘리먼트 정리
+      // Clean up remote video elements
       remoteVideoElementsRef.current.clear();
     };
   }, []);
 
-  // 브라우저 닫힘/백그라운드 전환 감지하여 세션 종료 시도
+  // Detect browser close / background transition and try to end the session
   useEffect(() => {
-    // beforeunload: 브라우저 닫힘/새로고침/페이지 이동 감지
+    // beforeunload: detect browser close, refresh, or navigation
     const handleBeforeUnload = () => {
-      // 동기적으로 Conference 종료 시도 (LINE 인앱 브라우저에서는 제한적)
+      // Synchronously attempt to end the Conference (limited inside LINE in-app browser)
       if (conference && typeof conference.leaveConference === 'function') {
         try {
-          // 비동기 호출이지만 최선을 다함
+          // Async call but best-effort
           conference.leaveConference().catch(() => {});
         } catch (error) {
-          // 오류 무시
+          // Ignore errors
         }
       }
     };
 
-    // visibilitychange: 페이지가 숨겨짐 (백그라운드, 다른 앱 전환)
+    // visibilitychange: page is hidden (background, switched apps)
     let visibilityTimer: NodeJS.Timeout | null = null;
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // 페이지가 숨겨진 후 30초 후에도 여전히 숨겨져 있으면 세션 종료
+        // If still hidden 30 seconds after the page was hidden, end the session
         visibilityTimer = setTimeout(() => {
           if (document.hidden && conference && connectionStatus.connected) {
             console.log('[PlanetKit] Page hidden for 30s, attempting to leave conference');
@@ -1015,9 +1015,9 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               conference.leaveConference().catch(() => {});
             }
           }
-        }, 30000); // 30초
+        }, 30000); // 30 seconds
       } else {
-        // 페이지가 다시 보이면 타이머 취소
+        // Cancel the timer when the page becomes visible again
         if (visibilityTimer) {
           clearTimeout(visibilityTimer);
           visibilityTimer = null;
@@ -1025,11 +1025,11 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
       }
     };
 
-    // 이벤트 리스너 등록
+    // Register event listeners
     window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 정리
+    // Cleanup
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -1039,7 +1039,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     };
   }, [conference, connectionStatus.connected]);
 
-  // 참가자를 TileParticipant로 변환
+  // Convert participants to TileParticipant
   const tileParticipants: TileParticipant[] = participants.map(p => ({
     ...p,
     isLocal: p.id === config.userId
@@ -1047,7 +1047,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
   return (
     <div className="h-screen w-screen flex flex-col bg-black">
-      {/* 숨겨진 미디어 엘리먼트들 */}
+      {/* Hidden media elements */}
       <audio ref={audioElementRef} autoPlay playsInline />
       <video
         ref={localVideoRef}
@@ -1057,7 +1057,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
         style={{ display: 'none' }}
       />
 
-      {/* 연결 전: 중앙 연결 카드 */}
+      {/* Pre-connection: centered connect card */}
       {!connectionStatus.connected && (
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="bg-card rounded-lg p-6 max-w-sm w-full space-y-4 border border-border">
@@ -1094,10 +1094,10 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
         </div>
       )}
 
-      {/* 연결 후: 전체 화면 레이아웃 */}
+      {/* Post-connection: full-screen layout */}
       {connectionStatus.connected && (
         <>
-          {/* 상단 상태 바 */}
+          {/* Top status bar */}
           <div className="fixed top-0 left-0 right-0 z-20 bg-black/70 backdrop-blur-sm border-b border-white/10">
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-3 text-white">
@@ -1142,7 +1142,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             </div>
           </div>
 
-          {/* 비디오 그리드 */}
+          {/* Video grid */}
           <div className="absolute top-[52px] bottom-[100px] left-0 right-0 w-full">
             <TileView participants={tileParticipants} />
 
@@ -1150,10 +1150,10 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             <MediaStatsPanel conference={conference} enabled={isStatsPanelOpen && connectionStatus.connected} />
           </div>
 
-          {/* 하단 컨트롤 */}
+          {/* Bottom controls */}
           <div className="fixed bottom-0 left-0 right-0 z-20 bg-black/70 backdrop-blur-sm border-t border-white/10">
             <div className="flex items-center justify-evenly w-full px-2 py-4">
-              {/* 비디오 토글 */}
+              {/* Video toggle */}
               <Button
                 onClick={toggleVideo}
                 size="lg"
@@ -1170,7 +1170,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 )}
               </Button>
 
-              {/* 마이크 토글 */}
+              {/* Microphone toggle */}
               <Button
                 onClick={toggleAudio}
                 size="lg"
@@ -1187,7 +1187,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 )}
               </Button>
 
-              {/* 초대 링크 공유 */}
+              {/* Share invite link */}
               <Button
                 onClick={shareInviteUrl}
                 size="lg"
@@ -1197,7 +1197,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 <Share2 className="w-5 h-5" />
               </Button>
 
-              {/* AI Agent 초대/내보내기 */}
+              {/* AI Agent invite/remove */}
               {!aiAgentJoined && !aiAgentSessionUsed && (
                 <Button
                   onClick={inviteAIAgent}
@@ -1228,7 +1228,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                   )}
                 </Button>
               )}
-              {/* AI Agent 듣기/응답 모드 토글 - 초대자만 표시 */}
+              {/* AI Agent listen/respond mode toggle — visible only to inviter */}
               {aiAgentJoined && isAIAgentInviter && (
                 <Button
                   onClick={toggleAgentMode}
@@ -1299,7 +1299,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                 <BarChart3 className="w-5 h-5" />
               </Button>
 
-              {/* 연결 해제 */}
+              {/* Disconnect */}
               <Button
                 onClick={disconnect}
                 size="lg"
@@ -1312,7 +1312,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
         </>
       )}
 
-      {/* 초대 사용자 선택 다이얼로그 */}
+      {/* Invite user selection dialog */}
       <InviteUserDialog
         open={inviteDialogOpen}
         onOpenChange={setInviteDialogOpen}

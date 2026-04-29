@@ -14,14 +14,14 @@ interface LanguageProviderProps {
 }
 
 export const LanguageProvider = ({ children }: LanguageProviderProps) => {
-  // 브라우저 언어 감지: 한국어면 'ko', 그 외에는 'en'
+  // Detect browser language: 'ko' for Korean, otherwise 'en'
   const getDefaultLanguage = (): Language => {
     const savedLanguage = localStorage.getItem('language');
     if (savedLanguage === 'ko' || savedLanguage === 'en' || savedLanguage === 'ja' || savedLanguage === 'th' || savedLanguage === 'zh-TW') {
       return savedLanguage as Language;
     }
 
-    // 브라우저 언어 감지
+    // Detect browser language
     const browserLang = navigator.language.toLowerCase();
     if (browserLang.startsWith('ko')) return 'ko';
     if (browserLang.startsWith('ja')) return 'ja';
@@ -32,7 +32,7 @@ export const LanguageProvider = ({ children }: LanguageProviderProps) => {
 
   const [language, setLanguage] = useState<Language>(getDefaultLanguage());
 
-  // 언어 변경 시 localStorage에 저장
+  // Save to localStorage when language changes
   useEffect(() => {
     localStorage.setItem('language', language);
   }, [language]);

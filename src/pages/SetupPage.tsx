@@ -67,9 +67,9 @@ const SetupPage = () => {
     }
   }, []);
 
-  // 환경을 Evaluation으로 자동 설정 (컴포넌트 마운트 시 1회만)
+  // Auto-set environment to Evaluation (only once on component mount)
   useEffect(() => {
-    // 환경이 설정되지 않았거나 real인 경우에만 eval로 강제 설정
+    // Force eval only if environment is unset or set to real
     if (!planetKitConfig.environment || planetKitConfig.environment === 'real') {
       setPlanetKitConfig(prev => ({
         ...prev,
@@ -80,14 +80,14 @@ const SetupPage = () => {
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 빈 배열로 마운트 시 1회만 실행
+  }, []); // Empty dependency array — runs only once on mount
 
-  // 페이지 타이틀 업데이트
+  // Update page title
   useEffect(() => {
     document.title = language === 'ko' ? 'WebPlanet SDK 테스트' : 'WebPlanet SDK Test';
   }, [language]);
 
-  // LIFF 로그인 후 자동으로 User ID와 Display Name 설정
+  // After LIFF login, auto-fill User ID and Display Name
   useEffect(() => {
     if (isLoggedIn && profile) {
       setPlanetKitConfig(prev => ({
@@ -98,7 +98,7 @@ const SetupPage = () => {
     }
   }, [isLoggedIn, profile]);
 
-  // URL 파라미터에서 room 읽어서 자동 선택
+  // Read room from URL parameters and auto-select
   useEffect(() => {
     const roomParam = searchParams.get('room');
     if (roomParam) {
@@ -110,13 +110,13 @@ const SetupPage = () => {
       setPlanetKitConfig(prev => ({ ...prev, roomId: roomParam, accessToken: '' }));
       console.log('[SetupPage] Auto-selected room from deep link:', roomParam);
     }
-  }, [searchParams]); // searchParams 변경 시 실행
+  }, [searchParams]); // Runs when searchParams change
 
-  // 자동 토큰 생성 및 미팅 참여
+  // Auto-generate token and join the meeting
   useEffect(() => {
     const roomParam = searchParams.get('room');
 
-    // 디버그 정보 업데이트 (room 파라미터가 있을 때만)
+    // Update debug info (only when a room parameter is present)
     if (roomParam) {
       let status = 'Waiting for conditions...';
       if (!isLoggedIn) {
@@ -155,15 +155,15 @@ const SetupPage = () => {
       });
     }
 
-    // 조건: URL에 room 파라미터가 있고, 로그인 완료, 토큰이 없고, 아직 자동 생성하지 않음
+    // Conditions: URL has a room parameter, login is complete, token is absent, and we haven't auto-generated yet
     if (roomParam && isLoggedIn && profile && planetKitConfig.roomId && !planetKitConfig.accessToken && !autoTokenGeneratedRef.current) {
-      // 필수 설정이 모두 있는지 확인
+      // Verify all required configuration is present
       if (planetKitConfig.serviceId && planetKitConfig.apiKey && planetKitConfig.userId) {
-        autoTokenGeneratedRef.current = true; // 중복 실행 방지
+        autoTokenGeneratedRef.current = true; // Prevent duplicate runs
         console.log('[SetupPage] Auto-generating token for deep link entry...');
         setDebugInfo(prev => prev ? { ...prev, status: '🚀 Generating token...' } : null);
 
-        // 토큰 생성
+        // Generate the token
         generatePlanetKitToken(
           planetKitConfig.serviceId,
           planetKitConfig.apiKey,
@@ -179,13 +179,13 @@ const SetupPage = () => {
           console.log('[SetupPage] Token auto-generated successfully');
           setDebugInfo(prev => prev ? { ...prev, status: '✅ Token generated!' } : null);
 
-          // 토큰 생성 성공 toast
+          // Token generation success toast
           toast({
             title: language === 'ko' ? '자동 입장 준비 완료' : 'Auto-entry Ready',
             description: language === 'ko' ? `${planetKitConfig.roomId} 룸에 입장할 수 있습니다.` : `Ready to join ${planetKitConfig.roomId} room.`,
           });
 
-          // 0.5초 후 자동으로 미팅 페이지로 이동
+          // Auto-navigate to the meeting page after 0.5 seconds
           setTimeout(() => {
             console.log('[SetupPage] Auto-navigating to meeting page...');
             setDebugInfo(prev => prev ? { ...prev, status: '🚀 Navigating to meeting...' } : null);
@@ -193,7 +193,7 @@ const SetupPage = () => {
           }, 500);
         }).catch(error => {
           console.error('[SetupPage] Auto token generation failed:', error);
-          autoTokenGeneratedRef.current = false; // 실패 시 다시 시도 가능하도록
+          autoTokenGeneratedRef.current = false; // Allow retry on failure
           setDebugInfo(prev => prev ? { ...prev, status: `❌ Token generation failed: ${error instanceof Error ? error.message : 'Unknown error'}` } : null);
           toast({
             title: language === 'ko' ? '자동 토큰 생성 실패' : 'Auto Token Generation Failed',
@@ -310,7 +310,7 @@ Status: ${debugInfo.status}`;
     });
   };
 
-  // LIFF ID 입력 필요
+  // LIFF ID input required
   if (needsLiffId) {
     const handleLiffIdSubmit = async () => {
       if (!liffIdInput.trim()) {
@@ -380,7 +380,7 @@ Status: ${debugInfo.status}`;
     );
   }
 
-  // LIFF 초기화 중
+  // LIFF initializing
   if (!isInitialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -396,7 +396,7 @@ Status: ${debugInfo.status}`;
     );
   }
 
-  // LIFF 에러
+  // LIFF error
   if (liffError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
@@ -418,7 +418,7 @@ Status: ${debugInfo.status}`;
     );
   }
 
-  // LINE 로그인 필요
+  // LINE login required
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
@@ -443,10 +443,10 @@ Status: ${debugInfo.status}`;
     );
   }
 
-  // 메인 설정 화면
+  // Main setup screen
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
-      {/* 헤더 */}
+      {/* Header */}
       <div className="border-b border-border bg-card sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-2">
@@ -492,7 +492,7 @@ Status: ${debugInfo.status}`;
 
       <div className="container mx-auto px-4 py-6 max-w-2xl">
         <div className="space-y-4">
-          {/* 디버그 정보 (딥링크 진입 시에만 표시) */}
+          {/* Debug info (visible only on deep-link entry) */}
           {searchParams.get('room') && debugInfo && (
             <Card className="bg-gradient-to-br from-yellow-100 to-orange-100 border-2 border-yellow-500">
               <CardHeader className="pb-3">
@@ -644,7 +644,7 @@ Status: ${debugInfo.status}`;
             </Card>
           )}
 
-          {/* Configuration Section (Environment + Custom Credentials 통합) */}
+          {/* Configuration Section (Environment + Custom Credentials combined) */}
           <ConfigurationSection language={language} />
 
           {/* AI Provider Selection */}

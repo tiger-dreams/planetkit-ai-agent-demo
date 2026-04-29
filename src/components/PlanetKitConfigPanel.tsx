@@ -22,9 +22,9 @@ export const PlanetKitConfigPanel = ({ config, onConfigChange }: PlanetKitConfig
   const [showAccessToken, setShowAccessToken] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
 
-  // 환경을 Evaluation으로 자동 설정 (컴포넌트 마운트 시 1회만)
+  // Auto-set environment to Evaluation (only once on component mount)
   useEffect(() => {
-    // 환경이 설정되지 않았거나 real인 경우에만 eval로 강제 설정
+    // Force eval only if environment is unset or set to real
     if (!config.environment || config.environment === 'real') {
       onConfigChange({
         ...config,
@@ -35,7 +35,7 @@ export const PlanetKitConfigPanel = ({ config, onConfigChange }: PlanetKitConfig
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 빈 배열로 마운트 시 1회만 실행
+  }, []); // Empty dependency array — runs only once on mount
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -100,8 +100,8 @@ export const PlanetKitConfigPanel = ({ config, onConfigChange }: PlanetKitConfig
         config.apiKey,
         config.userId,
         config.roomId,
-        3600, // 1시간 유효 (사용되지 않음)
-        config.apiSecret || undefined // API Secret 전달
+        3600, // 1 hour validity (unused)
+        config.apiSecret || undefined // Pass API Secret
       );
       
       onConfigChange({ ...config, accessToken: token });
@@ -310,7 +310,7 @@ export const PlanetKitConfigPanel = ({ config, onConfigChange }: PlanetKitConfig
 
         <Separator className="my-4" />
 
-        {/* Access Token 생성 */}
+        {/* Generate Access Token */}
         <div className="space-y-4 pt-4 border-t border-border">
           <div className="flex items-center justify-between">
             <h4 className="font-semibold text-sm">Access Token 관리</h4>
@@ -345,7 +345,7 @@ export const PlanetKitConfigPanel = ({ config, onConfigChange }: PlanetKitConfig
           </div>
         </div>
 
-        {/* 생성된 Access Token */}
+        {/* Generated Access Token */}
         {config.accessToken && (
           <div className="space-y-2 pt-4 border-t border-border">
             <div className="flex items-center justify-between">
@@ -392,7 +392,7 @@ export const PlanetKitConfigPanel = ({ config, onConfigChange }: PlanetKitConfig
           </div>
         )}
 
-        {/* 설정 요약 */}
+        {/* Configuration summary */}
         <div className="mt-6 p-3 bg-muted/20 rounded-md">
           <h4 className="font-semibold text-sm mb-2">설정 요약</h4>
           <div className="grid grid-cols-2 gap-2 text-xs">

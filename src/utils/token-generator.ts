@@ -17,17 +17,17 @@ export const generatePlanetKitToken = async (
   try {
     const now = Math.floor(Date.now() / 1000);
 
-    // API Secret 필수 체크
+    // API Secret is required
     if (!apiSecret) {
       throw new Error('API Secret is required for PlanetKit token generation');
     }
 
-    // API Secret을 secret으로 사용
+    // Use API Secret as the signing secret
     const secret = new TextEncoder().encode(apiSecret);
 
-    // PlanetKit 공식 문서의 필수 필드만 사용
-    // 추가 필드를 넣으면 토큰 크기가 커지므로 금지됨
-    // Note: exp, nbf, room 등의 필드는 의도적으로 제외됨
+    // Use only the required fields from the PlanetKit official documentation
+    // Adding extra fields increases token size, so they are disallowed
+    // Note: fields like exp, nbf, room are intentionally excluded
     const payload = {
       sub: serviceId,  // Service ID
       uid: userId,     // User ID

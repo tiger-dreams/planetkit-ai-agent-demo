@@ -1,6 +1,6 @@
 // PlanetKit Callback Event Types
 
-// PlanetKit 실제 콜백 파라미터 구조
+// Actual PlanetKit callback parameter structure
 export interface PlanetKitCallbackParams {
   sid?: string;              // Session ID
   svc_id?: string;           // Service ID
