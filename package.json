@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "test:ai": "node --test scripts/verify-ai-session.mjs scripts/verify-gemini-provider.mjs",
+    "test:ai": "node --test scripts/verify-ai-session.mjs scripts/verify-gemini-provider.mjs scripts/verify-ai-capture.mjs scripts/verify-room-audio.mjs",
     "test:group": "node --test scripts/verify-group-call.mjs scripts/verify-headless-stream.mjs"
   },
   "dependencies": {

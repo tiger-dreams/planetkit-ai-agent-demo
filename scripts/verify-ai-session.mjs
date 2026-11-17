@@ -93,6 +93,7 @@ test('headless model setup failure leaves the room and never signals ready', asy
   const window = {};
   const context = vm.createContext({
     window,
+    roomAudioCleanupRef: { current: null },
     console: { log() {}, error() {}, warn() {} },
     setupAIAgent() {}, joinPlanetKitConference: async () => {},
     setupAudioRouting: async () => { throw new Error('Setup rejected'); },
