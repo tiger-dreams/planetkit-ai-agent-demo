@@ -46,14 +46,44 @@ Free-tier data handling and existing client API-key exposure still need to be
 considered before using real customer data. This migration does not implement
 the separate authentication and ephemeral-token improvements.
 
+## Audio input and troubleshooting
+
+The unattended agent uses the PlanetKit room stream as its only audio input.
+It does not request the runner's microphone, which can be a synthetic device.
+Interactive AI pages keep microphone input as the default. Room audio may attach
+after conference connection; the agent waits for a live track and follows track
+replacement without stopping tracks owned by PlanetKit.
+
+PCM input includes silent frames. Gemini's automatic voice-activity detection
+needs the audio between words and after speech to determine a turn boundary.
+The local RMS threshold is used for barge-in detection, not to drop PCM frames.
+The input AudioContext must reach `running` before startup succeeds.
+
+In viva-connect-test, the existing Render `POST /agent-status` endpoint with
+`includeDiagnostics: true` exposes the agent's `service` diagnostics during an
+active call. Check `audioInput`, `hasRoomAudioSource`, `roomAudioTracks`,
+`audioContextState`, `actualInputSampleRate`, `capturedAudioFrames`,
+`speechAudioFrames` and `forwardedAudioFrames`. Compare successive snapshots:
+no captured frames suggests a capture/track problem; captured frames with no
+speech suggests a muted or silent source. Forwarded frames only establish that
+the local provider send method was called, not that Gemini recognized speech.
+These diagnostics contain states and counters rather than recorded audio.
+
+A greeting is triggered by text and does not validate user audio capture.
+An agent-ready log, HTTP 202 or model setup acknowledgment is also insufficient
+to prove two-way conversation. Confirm a second spoken answer after a user
+utterance before treating a live test as passed.
+
 ## Verification
 
 Run `npm run test:ai`, `npm run test:group`, `npm run typecheck` and
-`npm run build`. The API/provider tests use dummy keys and mocked WebSockets.
-They do not establish live model access or validate real two-way audio. After
-deployment, check a short synthetic conversation, transcription, interruption,
-listen/respond switching and the five-minute farewell flow using the actual
-project before relying on the AI path.
+`npm run build`. The API/provider/capture/room-source
+tests use mocked WebSockets and Web Audio objects, including execution of the
+actual PCM worklet. They cover speech followed by silence and another utterance,
+input-context startup, mute/unmute, resource cleanup, delayed room tracks and
+track replacement. They do not establish live model access or real two-way
+audio. After deployment, use a short synthetic conversation to verify a greeting,
+a spoken question, a second answer, interruption and listen/respond switching.
 
 ## Sources
 

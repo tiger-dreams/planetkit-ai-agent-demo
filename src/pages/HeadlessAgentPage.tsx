@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { aiAgentService, AIAgentState } from '@/services/ai-agent-service';
 import { AgentLanguage, AGENT_SYSTEM_PROMPTS } from '@/config/ai-agent-languages';
+import { watchRoomAudioInput } from '@/utils/room-audio-input';
 import * as PlanetKitEval from '@line/planet-kit/dist/planet-kit-eval';
 
 /**
@@ -40,6 +41,7 @@ export const HeadlessAgentPage = () => {
   // Refs
   const conferenceRef = useRef<any>(null);
   const audioElementRef = useRef<HTMLAudioElement>(null);
+  const roomAudioCleanupRef = useRef<(() => void) | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const peersRef = useRef<Set<string>>(new Set());
@@ -89,6 +91,8 @@ export const HeadlessAgentPage = () => {
         console.error('[HeadlessAgent] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
         setIsConnected(false);
         window.agentConnected = false;
+        roomAudioCleanupRef.current?.();
+        roomAudioCleanupRef.current = null;
         try {
           await conferenceRef.current?.leaveConference?.();
         } catch (leaveError) {
@@ -109,6 +113,8 @@ export const HeadlessAgentPage = () => {
     // Cleanup on unmount
     return () => {
       console.log('[HeadlessAgent] Cleaning up...');
+      roomAudioCleanupRef.current?.();
+      roomAudioCleanupRef.current = null;
       if (autoLeaveTimerRef.current) clearTimeout(autoLeaveTimerRef.current);
       if (sessionTimerRef.current) clearTimeout(sessionTimerRef.current);
       aiAgentService.off('stateChange', handleStateChange);
@@ -223,23 +229,13 @@ export const HeadlessAgentPage = () => {
     const conferenceDelegate = {
       evtConnected: () => {
         console.log('[HeadlessAgent] Conference connected');
-        // Capture room audio AFTER conference is fully connected
-        // Try srcObject first (direct MediaStream), fall back to captureStream
+        // PlanetKit may attach or replace its room track after this event.
+        roomAudioCleanupRef.current?.();
         if (audioElementRef.current) {
-          try {
-            const audioEl = audioElementRef.current as any;
-            const roomStream: MediaStream | null =
-              (audioEl.srcObject instanceof MediaStream ? audioEl.srcObject : null)
-              ?? audioEl.captureStream?.();
-            if (roomStream) {
-              aiAgentService.addAudioSource(roomStream);
-              console.log('[HeadlessAgent] ✅ Room audio → Gemini routing complete');
-            } else {
-              console.warn('[HeadlessAgent] No room audio stream available');
-            }
-          } catch (err) {
-            console.warn('[HeadlessAgent] Could not capture room audio:', err);
-          }
+          roomAudioCleanupRef.current = watchRoomAudioInput(
+            audioElementRef.current,
+            stream => aiAgentService.setRoomAudioSource(stream),
+          );
         }
 
         // 5-minute session timer: wait for current speech to end, then send farewell and leave
@@ -274,6 +270,8 @@ export const HeadlessAgentPage = () => {
 
       evtDisconnected: (details: any) => {
         console.log('[HeadlessAgent] Conference disconnected:', details);
+        roomAudioCleanupRef.current?.();
+        roomAudioCleanupRef.current = null;
         // Cancel pending timers to avoid duplicate notifyAgentLeaving calls
         if (autoLeaveTimerRef.current) {
           clearTimeout(autoLeaveTimerRef.current);
@@ -467,6 +465,7 @@ registerProcessor('audio-playback-processor', AudioPlaybackProcessor);
 
     // Connect to AI (Gemini or OpenAI)
     await aiAgentService.connect({
+      audioInput: 'room',
       language,
       voice,
       systemPrompt: AGENT_SYSTEM_PROMPTS[language],

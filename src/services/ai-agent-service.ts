@@ -3,7 +3,7 @@
  *
  * Connects to AI providers (Google Gemini / OpenAI Realtime) via WebSocket
  * for real-time bidirectional audio streaming.
- * Captures microphone audio as PCM16, sends it to the AI provider,
+ * Captures microphone or room audio as PCM16, sends it to the AI provider,
  * and emits the AI's audio response for playback.
  */
 
@@ -24,6 +24,7 @@ export interface AIAgentSessionConfig {
   voice?: string;
   systemPrompt?: string;
   provider?: AIProvider;
+  audioInput?: 'microphone' | 'room';
 }
 
 export interface AIAgentEventMap {
@@ -81,11 +82,14 @@ registerProcessor('${AUDIO_WORKLET_NAME}', PCMCaptureProcessor);
 export class AIAgentService {
   private provider: BaseAIProvider | null = null;
   private currentProviderType: AIProvider = 'gemini';
+  private audioInput: 'microphone' | 'room' = 'microphone';
   private audioContext: AudioContext | null = null;
   private micStream: MediaStream | null = null;
   private workletNode: AudioWorkletNode | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private additionalSources: MediaStreamAudioSourceNode[] = [];
+  private roomAudioStream: MediaStream | null = null;
+  private roomSourceNode: MediaStreamAudioSourceNode | null = null;
 
   private state: AIAgentState = 'idle';
   private isMuted = false;
@@ -97,6 +101,9 @@ export class AIAgentService {
   // Barge-in debounce for Gemini (avoid triggering on brief noise)
   private lastBargeInTime = 0;
   private consecutiveSpeechFrames = 0;
+  private capturedAudioFrames = 0;
+  private speechAudioFrames = 0;
+  private forwardedAudioFrames = 0;
 
   // Event listeners
   private listeners: { [K in keyof AIAgentEventMap]?: EventCallback<AIAgentEventMap[K]>[] } = {};
@@ -131,7 +138,7 @@ export class AIAgentService {
 
   /**
    * Connect to the AI agent. Fetches session config from backend,
-   * creates the appropriate provider, and starts microphone capture.
+   * creates the appropriate provider, and starts the selected audio input.
    */
   async connect(config: AIAgentSessionConfig): Promise<void> {
     if (this.state === 'connected' || this.state === 'connecting') {
@@ -139,9 +146,15 @@ export class AIAgentService {
       return;
     }
 
+    this.capturedAudioFrames = 0;
+    this.speechAudioFrames = 0;
+    this.forwardedAudioFrames = 0;
+    this.consecutiveSpeechFrames = 0;
+    this.lastBargeInTime = 0;
     this.setState('connecting');
     this.currentLanguage = config.language;
     this.currentProviderType = config.provider || 'gemini';
+    this.audioInput = config.audioInput || 'microphone';
 
     try {
       // 1. Fetch session configuration from our backend
@@ -184,8 +197,8 @@ export class AIAgentService {
       // 3. Connect via provider
       await this.provider.connect(this.sessionConfig!);
 
-      // 4. Start microphone capture with provider-specific sample rate
-      await this.startMicCapture();
+      // 4. Start the selected PCM input with the provider-specific sample rate.
+      await this.startAudioCapture();
 
       this.setState('connected');
       console.log(`[AIAgent] Connected successfully via ${this.currentProviderType}`);
@@ -270,6 +283,16 @@ export class AIAgentService {
     this._connectAudioSource(stream);
   }
 
+  /** Replace the SDK-owned room input without accumulating old audio nodes. */
+  setRoomAudioSource(stream: MediaStream | null): void {
+    this.roomSourceNode?.disconnect();
+    this.roomSourceNode = null;
+    this.roomAudioStream = stream;
+    if (!stream || !stream.getAudioTracks().length || !this.audioContext || !this.workletNode) return;
+    this.roomSourceNode = this.audioContext.createMediaStreamSource(stream);
+    this.roomSourceNode.connect(this.workletNode);
+  }
+
   /**
    * Send a farewell message to the AI, triggering a closing statement.
    */
@@ -277,6 +300,38 @@ export class AIAgentService {
     if (this.provider) {
       this.provider.sendFarewell(language);
     }
+  }
+
+  getDiagnostics() {
+    return {
+      state: this.state,
+      mode: this.mode,
+      provider: this.currentProviderType,
+      audioInput: this.audioInput,
+      providerReady: this.provider != null,
+      providerState: this.provider?.getState() ?? 'none',
+      hasSessionConfig: this.sessionConfig != null,
+      mockMode: Boolean(this.sessionConfig?.mockMode),
+      hasMicStream: this.micStream != null,
+      micTracks: this.micStream?.getAudioTracks().map((track) => ({
+        enabled: track.enabled,
+        muted: track.muted,
+        readyState: track.readyState,
+      })) ?? [],
+      audioContextState: this.audioContext?.state ?? 'none',
+      actualInputSampleRate: this.audioContext?.sampleRate ?? null,
+      capturedAudioFrames: this.capturedAudioFrames,
+      speechAudioFrames: this.speechAudioFrames,
+      forwardedAudioFrames: this.forwardedAudioFrames,
+      hasWorkletNode: this.workletNode != null,
+      additionalAudioSources: this.additionalSources.length,
+      hasRoomAudioSource: this.roomSourceNode != null,
+      roomAudioTracks: this.roomAudioStream?.getAudioTracks().map((track) => ({
+        enabled: track.enabled,
+        muted: track.muted,
+        readyState: track.readyState,
+      })) ?? [],
+    };
   }
 
   // --- Private methods ---
@@ -302,22 +357,31 @@ export class AIAgentService {
     console.log('[AIAgent] Room audio connected to AI input');
   }
 
-  private async startMicCapture(): Promise<void> {
+  private async startAudioCapture(): Promise<void> {
     // Get sample rate based on provider
     const sampleRate = PROVIDER_AUDIO_CONFIG[this.currentProviderType].inputSampleRate;
-    console.log(`[AIAgent] Starting mic capture at ${sampleRate}Hz for ${this.currentProviderType}`);
+    console.log(`[AIAgent] Starting ${this.audioInput} capture at ${sampleRate}Hz for ${this.currentProviderType}`);
 
-    this.micStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        sampleRate,
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-    });
+    // Headless agents consume SDK room audio, not the browser's fake microphone.
+    if (this.audioInput === 'microphone') {
+      this.micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+    }
 
     this.audioContext = new AudioContext({ sampleRate });
+    if (this.audioContext.state !== 'running') {
+      await this.audioContext.resume();
+    }
+    if (this.audioContext.state !== 'running') {
+      throw new Error(`Audio input context is not running (${this.audioContext.state})`);
+    }
 
     // Register worklet from inline code
     const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
@@ -331,30 +395,34 @@ export class AIAgentService {
 
     URL.revokeObjectURL(workletUrl);
 
-    this.sourceNode = this.audioContext.createMediaStreamSource(this.micStream);
+    if (this.micStream) {
+      this.sourceNode = this.audioContext.createMediaStreamSource(this.micStream);
+    }
     this.workletNode = new AudioWorkletNode(this.audioContext, AUDIO_WORKLET_NAME);
 
     this.workletNode.port.onmessage = (ev) => {
-      if (this.isMuted) return;
+      this.capturedAudioFrames++;
+      if (this.isMuted) {
+        this.consecutiveSpeechFrames = 0;
+        return;
+      }
       if (!this.provider) return;
 
       const pcm16Buffer: ArrayBuffer = ev.data.pcm16;
 
-      // VAD: RMS-based silence detection
+      // RMS is used only for local barge-in; server VAD needs silent PCM too.
       const pcm16 = new Int16Array(pcm16Buffer);
       let sum = 0;
       for (let i = 0; i < pcm16.length; i++) sum += pcm16[i] * pcm16[i];
       const rms = Math.sqrt(sum / pcm16.length);
 
-      // Silence threshold (higher to reduce false triggers)
-      if (rms < 50) {
-        this.consecutiveSpeechFrames = 0;
-        return;
-      }
+      const isSpeech = rms >= 50;
+      if (isSpeech) this.speechAudioFrames++;
+      else this.consecutiveSpeechFrames = 0;
 
       // Barge-in: Cancel AI response if user starts speaking while AI is talking
       // For Gemini, we need to detect this client-side (OpenAI does it server-side)
-      if (this.currentProviderType === 'gemini' && this.provider.getState() === 'speaking') {
+      if (isSpeech && this.currentProviderType === 'gemini' && this.provider.getState() === 'speaking') {
         this.consecutiveSpeechFrames++;
         const now = Date.now();
 
@@ -370,9 +438,10 @@ export class AIAgentService {
 
       // Send audio to provider
       this.provider.sendAudio(pcm16Buffer);
+      this.forwardedAudioFrames++;
     };
 
-    this.sourceNode.connect(this.workletNode);
+    this.sourceNode?.connect(this.workletNode);
     this.workletNode.connect(this.audioContext.destination);
 
     // Apply pending room audio source
@@ -381,8 +450,10 @@ export class AIAgentService {
       this.pendingAudioSource = null;
     }
 
+    this.setRoomAudioSource(this.roomAudioStream);
+
     this.setState('listening');
-    console.log('[AIAgent] Microphone capture started');
+    console.log(`[AIAgent] ${this.audioInput} capture started`);
   }
 
   private setState(newState: AIAgentState): void {
@@ -418,10 +489,14 @@ export class AIAgentService {
       this.micStream = null;
     }
 
+    // Detach the room input without stopping SDK-owned tracks.
+    this.setRoomAudioSource(null);
+
     // Disconnect audio nodes
     this.additionalSources.forEach((s) => s.disconnect());
     this.additionalSources = [];
     if (this.workletNode) {
+      this.workletNode.port.onmessage = null;
       this.workletNode.disconnect();
       this.workletNode = null;
     }
