@@ -87,7 +87,20 @@ export const HeadlessAgentPage = () => {
         console.error('[HeadlessAgent] Error message:', error?.message || 'Unknown error');
         console.error('[HeadlessAgent] Error stack:', error?.stack || 'No stack trace');
         console.error('[HeadlessAgent] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        setIsConnected(false);
         window.agentConnected = false;
+        try {
+          await conferenceRef.current?.leaveConference?.();
+        } catch (leaveError) {
+          console.warn('[HeadlessAgent] Failed to leave after initialization error:', leaveError);
+        }
+        conferenceRef.current = null;
+        try {
+          await audioContextRef.current?.close();
+        } catch (closeError) {
+          console.warn('[HeadlessAgent] Failed to close audio after initialization error:', closeError);
+        }
+        audioContextRef.current = null;
       }
     };
 

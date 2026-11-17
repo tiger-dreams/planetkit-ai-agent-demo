@@ -678,7 +678,7 @@ Status: ${debugInfo.status}`;
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-2 text-center">
-                {aiProvider === 'gemini' ? 'Using Google Gemini 2.0 Live API' : 'Using OpenAI Realtime API'}
+                {aiProvider === 'gemini' ? 'Using Google Gemini 3.8 Live API' : 'Using OpenAI Realtime API'}
               </p>
             </CardContent>
           </Card>

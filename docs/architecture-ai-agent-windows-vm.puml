@@ -52,7 +52,7 @@ cloud "LINE Planet" as LinePlanet {
 }
 
 cloud "Google AI" as GoogleAI {
-  component [Gemini 2.5\nMultimodal Live API] as GeminiAPI
+  component [Gemini 3.8 Live\nMultimodal Live API] as GeminiAPI
 }
 
 ' ══════════════════════════════════════════

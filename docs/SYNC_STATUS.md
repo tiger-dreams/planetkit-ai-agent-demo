@@ -2,6 +2,15 @@
 
 This is a curated public demo, not a mirror of the source application.
 
+## Gemini 3.8 Live update
+
+The default AI session model is now `models/gemini-3.8-live`. The provider waits
+for model setup acknowledgment, sends the current realtime audio format and
+uses output audio transcription. Failed initialization no longer marks a
+headless agent ready and releases its room/audio resources. API/provider/service
+regression checks cover 18 cases in addition to the nine group/audio-stream
+checks below. See [Gemini migration and pricing](GEMINI_LIVE.md).
+
 ## WebPlanetKit 6.0 update
 
 - Pin `@line/planet-kit` to `6.0.0` and the virtual background plugin to

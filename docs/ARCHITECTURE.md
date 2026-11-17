@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the architecture for the PlanetKit AI Agent Demo — a LINE LIFF video conferencing application with AI Agent (Gemini 2.0) integration, Agent Call (1-to-1 outbound voice), and group conferencing.
+This document describes the architecture for the PlanetKit AI Agent Demo — a LINE LIFF video conferencing application with AI Agent (Gemini 3.8 Live) integration, Agent Call (1-to-1 outbound voice), and group conferencing.
 
 ---
 
@@ -12,8 +12,8 @@ This document describes the architecture for the PlanetKit AI Agent Demo — a L
 |-------|-----------|---------|
 | Frontend | Vite + React 18 + TypeScript | SPA with mobile-first UI |
 | Styling | Tailwind CSS + shadcn/ui | Responsive component library |
-| Video SDK | LINE PlanetKit Web SDK 5.5 | WebRTC group conferencing |
-| AI | Google Gemini 2.0 Multimodal Live API | Real-time voice AI agent |
+| Video SDK | LINE PlanetKit Web SDK 6.0 | WebRTC group conferencing |
+| AI | Google Gemini 3.8 Live API | Real-time voice AI agent |
 | Auth | LINE LIFF | In-app authentication |
 | Backend | Vercel Serverless Functions (6) | API endpoints |
 | Database | Vercel Postgres (Neon) | Event logging, session tracking |

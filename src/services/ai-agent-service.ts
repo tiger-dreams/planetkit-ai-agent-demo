@@ -194,9 +194,11 @@ export class AIAgentService {
       this.provider.sendInitialGreeting(config.language);
     } catch (err: any) {
       console.error('[AIAgent] Connection error:', err);
+      this.cleanup();
       this.setState('error');
       this.emit('error', err.message || 'Connection failed');
-      this.cleanup();
+      // Callers must not mark the agent ready if the model rejects session setup.
+      throw err;
     }
   }
 

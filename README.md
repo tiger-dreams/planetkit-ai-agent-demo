@@ -38,13 +38,16 @@ for the current comparison scope and checks.
 - **Virtual Background (Blur)** - One-tap on/off blur via `@line/planet-kit-virtual-background` 2.0.0. Uses the official SDK 6.0 / plugin 2.0 pairing and waits for model initialization before enabling blur. The processed canvas is overlaid onto the local self-tile so the user sees the blur effect on themselves as well as remote peers.
 - **Media Statistics Panel** - Live `getCurrentStats()` polling at 2s intervals. Displays the SDK's raw outbound/inbound × audio/video fields (packetsSent/Received, bytesSent/Received, packetsLost, jitter, fps, frameWidth/Height, fir/pli/nackCount, …) without any reinterpretation.
 - **AI Agent (Multi-Provider)** - Real-time AI assistant with support for:
-  - **Google Gemini 2.0 Live API** - Default provider with 16kHz input audio
+  - **Google Gemini 3.8 Live API** - Default provider with 16kHz input audio
   - **OpenAI Realtime API** - Alternative provider with server-side VAD
 - **Barge-in Support** - Interrupt AI responses by speaking (auto-cancels AI output)
 - **Listen / Respond Mode** - Toggle AI between passive listening and active conversation
 - **Agent Call (1-to-1)** - Outbound voice calls via PlanetKit Agent Call API
 - **Multi-language Support** - Korean, English, Japanese, Traditional Chinese, Thai
 - **Mobile-first UI** - Portrait-optimized adaptive video grid with touch-friendly controls. SDK version is shown at the bottom of the Setup screen for quick verification.
+
+Gemini now uses the stable `gemini-3.8-live` model. See
+[migration, pricing and verification notes](docs/GEMINI_LIVE.md) before deployment.
 
 ## Architecture Overview
 
@@ -64,7 +67,7 @@ for the current comparison scope and checks.
 │  └────────┬───────┘  │     │  │  │ HeadlessAgentPage       │ │   │
 │           │          │     │  │  │  ┌──────────┐           │ │   │
 │           │          │     │  │  │  │AudioWork-│──> Gemini  │ │   │
-│           │          │     │  │  │  │let 16kHz │<── 2.0 API │ │   │
+│           │          │     │  │  │  │let 16kHz │<── 3.8 API │ │   │
 └───────────┼──────────┘     │  │  │  └──────────┘           │ │   │
             │ WebRTC         │  │  │  PlanetKit Conference    │ │   │
             │                │  │  └─────────────────────────┘ │   │
@@ -83,7 +86,7 @@ for the current comparison scope and checks.
 5. AI voice broadcast to all participants via `setCustomMediaStream()`
 
 **Provider-Specific Features:**
-| Feature | Gemini 2.0 | OpenAI Realtime |
+| Feature | Gemini 3.8 Live | OpenAI Realtime |
 |---------|------------|-----------------|
 | Input Sample Rate | 16kHz | 24kHz |
 | Output Sample Rate | 24kHz | 24kHz |
@@ -176,7 +179,7 @@ Update LIFF Endpoint URL in LINE Developers Console to your Vercel domain.
 
 **Selecting AI Provider:**
 When inviting an AI Agent, specify the provider via the `provider` parameter:
-- Default: `gemini` (Google Gemini 2.0 Live API)
+- Default: `gemini` (Google Gemini 3.8 Live API)
 - Alternative: `openai` (OpenAI Realtime API)
 
 Example API call:
@@ -241,7 +244,7 @@ planetkit-ai-agent-demo/
 │   │   ├── ai-agent-service.ts      # Multi-provider AI client orchestrator
 │   │   └── providers/
 │   │       ├── base-provider.ts     # Abstract base class for AI providers
-│   │       ├── gemini-provider.ts   # Gemini 2.0 Live API implementation
+│   │       ├── gemini-provider.ts   # Gemini 3.8 Live API implementation
 │   │       └── openai-provider.ts   # OpenAI Realtime API implementation
 │   ├── config/
 │   │   └── ai-agent-languages.ts    # Multi-language prompts & voices
@@ -284,7 +287,7 @@ planetkit-ai-agent-demo/
 - **Frontend**: Vite + React 18 + TypeScript + Tailwind CSS + shadcn/ui
 - **Video SDK**: LINE PlanetKit Web SDK 6.0 + `@line/planet-kit-virtual-background` 2.0.0
 - **AI Providers**:
-  - Google Gemini 2.0 Live API (WebSocket, 16kHz input)
+  - Google Gemini 3.8 Live API (WebSocket, 16kHz input)
   - OpenAI Realtime API (WebSocket, 24kHz input, server-side VAD)
 - **Auth**: LINE LIFF (LINE Front-end Framework)
 - **Backend**: Vercel Serverless Functions + Vercel Postgres

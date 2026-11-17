@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 /**
  * AI Agent Session API
  * Returns AI provider configuration for WebSocket connections.
- * Supports Google Gemini 2.0 Live API and OpenAI Realtime API.
+ * Supports Google Gemini 3.8 Live API and OpenAI Realtime API.
  * Falls back to mock mode when API keys are not configured.
  *
  * POST /api/ai-agent-session
@@ -153,12 +153,12 @@ export default async function handler(
   }
 
   try {
-    console.log('[AI Agent Session] Returning Gemini 2.0 Live API configuration');
+    console.log('[AI Agent Session] Returning Gemini 3.8 Live API configuration');
 
     return response.status(200).json({
       mockMode: false,
       provider: 'gemini',
-      model: 'models/gemini-2.5-flash-native-audio-latest',
+      model: 'models/gemini-3.8-live',
       wsEndpoint: 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent',
       apiKey: geminiApiKey,
       config: {

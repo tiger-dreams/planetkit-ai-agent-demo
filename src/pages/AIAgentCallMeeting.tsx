@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 /**
  * AI Agent Call Meeting Page
  * 
- * Provides a voice-only interface for real-time conversation with Gemini 2.0 AI.
+ * Provides a voice-only interface for real-time conversation with Gemini Live AI.
  * Mobile-first portrait layout with large touch-friendly controls.
  */
 export const AIAgentCallMeeting = () => {

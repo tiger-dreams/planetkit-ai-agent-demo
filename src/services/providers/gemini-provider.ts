@@ -1,7 +1,7 @@
 /**
  * Gemini AI Provider
  *
- * Implements the BaseAIProvider interface for Google's Gemini 2.0 Live API.
+ * Implements the BaseAIProvider interface for Google's Gemini 3.8 Live API.
  * Uses WebSocket for bidirectional audio streaming.
  */
 
@@ -11,63 +11,96 @@ import { AGENT_GREETING_TRIGGERS, AGENT_FAREWELL_MESSAGES, type AgentLanguage } 
 
 export class GeminiProvider extends BaseAIProvider {
   private sessionConfig: GeminiSessionConfig | null = null;
+  private cancelPendingConnect: (() => void) | null = null;
 
   async connect(config: GeminiSessionConfig): Promise<void> {
+    if (this.ws || this.cancelPendingConnect) this.disconnect();
     this.sessionConfig = config;
     this.setState('connecting');
 
     const wsUrl = `${config.wsEndpoint}?key=${config.apiKey}`;
 
     return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(wsUrl);
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (error) {
+        this.sessionConfig = null;
+        this.setState('error');
+        this.emitError('WebSocket connection error');
+        reject(error);
+        return;
+      }
+      this.ws = ws;
+      let settled = false;
 
-      const timeout = setTimeout(() => {
-        reject(new Error('WebSocket connection timeout'));
-        this.ws?.close();
-      }, 15000);
-
-      this.ws.onopen = () => {
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timeout);
-        console.log('[GeminiProvider] WebSocket connected');
-        this.sendSetupMessage();
-        resolve();
+        this.cancelPendingConnect = null;
+        if (error) reject(error);
+        else resolve();
       };
+      const fail = (message: string) => {
+        if (this.ws !== ws) return;
+        finish(new Error(message));
+        this.detachSocket(ws);
+        this.ws = null;
+        this.sessionConfig = null;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
+        this.setState('error');
+        this.emitError(message);
+      };
+      // Opening the transport does not mean the model accepted its setup.
+      const timeout = setTimeout(() => fail('Gemini WebSocket setup timeout'), 15000);
+      this.cancelPendingConnect = () => finish(new Error('Gemini disconnected before setup completed'));
 
-      this.ws.onclose = (ev) => {
-        clearTimeout(timeout);
-        console.log('[GeminiProvider] WebSocket closed:', ev.code, ev.reason);
-        if (this.state === 'connected' || this.state === 'listening' || this.state === 'speaking') {
-          this.setState('disconnected');
+      ws.onopen = () => {
+        if (this.ws !== ws) return;
+        console.log('[GeminiProvider] WebSocket connected; waiting for setup acknowledgment');
+        try {
+          this.sendSetupMessage();
+        } catch {
+          fail('Failed to send Gemini setup');
         }
       };
 
-      this.ws.onerror = (ev) => {
-        clearTimeout(timeout);
-        console.error('[GeminiProvider] WebSocket error:', ev);
-        this.emitError('WebSocket connection error');
-        reject(new Error('WebSocket error'));
+      ws.onclose = (ev) => {
+        if (this.ws !== ws) return;
+        const message = `Gemini WebSocket closed before setup completed (${ev.code}${ev.reason ? `: ${ev.reason}` : ''})`;
+        const wasPending = !settled;
+        finish(new Error(message));
+        this.detachSocket(ws);
+        this.ws = null;
+        this.sessionConfig = null;
+        this.setState('disconnected');
+        if (wasPending) this.emitError(message);
       };
 
-      this.ws.onmessage = (ev) => {
-        this.handleServerMessage(ev.data);
+      ws.onerror = () => fail('Gemini WebSocket connection error');
+      ws.onmessage = (ev) => {
+        this.handleServerMessage(ev.data, ws, () => {
+          if (settled) return;
+          finish();
+          this.setState('connected');
+        }, fail);
       };
     });
   }
 
   sendAudio(pcm16: ArrayBuffer): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.cancelPendingConnect) return;
 
     const base64 = this.arrayBufferToBase64(pcm16);
     const sampleRate = this.sessionConfig?.config.sampleRate || 16000;
 
     const message = {
       realtimeInput: {
-        mediaChunks: [
-          {
-            mimeType: `audio/pcm;rate=${sampleRate}`,
-            data: base64,
-          },
-        ],
+        audio: {
+          mimeType: `audio/pcm;rate=${sampleRate}`,
+          data: base64,
+        },
       },
     };
 
@@ -75,7 +108,7 @@ export class GeminiProvider extends BaseAIProvider {
   }
 
   sendTextMessage(text: string): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.cancelPendingConnect) return;
 
     const message = {
       clientContent: {
@@ -88,7 +121,7 @@ export class GeminiProvider extends BaseAIProvider {
   }
 
   sendInitialGreeting(language: string): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.cancelPendingConnect) return;
 
     const lang = language as AgentLanguage;
     const text = AGENT_GREETING_TRIGGERS[lang] ?? AGENT_GREETING_TRIGGERS.en;
@@ -111,7 +144,7 @@ export class GeminiProvider extends BaseAIProvider {
   }
 
   sendFarewell(language: string): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.cancelPendingConnect) return;
 
     const lang = language as AgentLanguage;
     const text = AGENT_FAREWELL_MESSAGES[lang] ?? AGENT_FAREWELL_MESSAGES.en;
@@ -129,7 +162,7 @@ export class GeminiProvider extends BaseAIProvider {
   }
 
   sendModeInstruction(mode: ProviderMode): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.cancelPendingConnect) return;
 
     const text = mode === 'listen'
       ? '(System instruction: You are now in LISTEN-ONLY mode. Do NOT speak, generate any audio, or make any sound. Silently absorb and remember everything being discussed. When you are switched back to respond mode, you will have full context of the conversation.)'
@@ -147,14 +180,13 @@ export class GeminiProvider extends BaseAIProvider {
   }
 
   disconnect(): void {
+    this.cancelPendingConnect?.();
+    this.cancelPendingConnect = null;
     if (this.ws) {
-      this.ws.onclose = null;
-      this.ws.onerror = null;
-      this.ws.onmessage = null;
-      if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
-        this.ws.close();
-      }
+      const ws = this.ws;
+      this.detachSocket(ws);
       this.ws = null;
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
     }
     this.sessionConfig = null;
     this.mode = 'respond';
@@ -179,6 +211,13 @@ export class GeminiProvider extends BaseAIProvider {
 
   // --- Private methods ---
 
+  private detachSocket(ws: WebSocket): void {
+    ws.onopen = null;
+    ws.onclose = null;
+    ws.onerror = null;
+    ws.onmessage = null;
+  }
+
   private sendSetupMessage(): void {
     if (!this.ws || !this.sessionConfig) return;
 
@@ -187,7 +226,7 @@ export class GeminiProvider extends BaseAIProvider {
       setup: {
         model: this.sessionConfig.model,
         generationConfig: {
-          responseModalities: cfg.responseModalities,
+          responseModalities: ['AUDIO'],
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
@@ -199,6 +238,7 @@ export class GeminiProvider extends BaseAIProvider {
         systemInstruction: {
           parts: [{ text: cfg.systemPrompt }],
         },
+        outputAudioTranscription: {},
       },
     };
 
@@ -206,22 +246,41 @@ export class GeminiProvider extends BaseAIProvider {
     this.ws.send(JSON.stringify(setup));
   }
 
-  private handleServerMessage(rawData: string | Blob): void {
+  private handleServerMessage(
+    rawData: string | Blob,
+    ws: WebSocket,
+    onSetupComplete: () => void,
+    onServerError: (message: string) => void,
+  ): void {
+    const parse = (text: string) => {
+      // A Blob may finish decoding after disconnect or a replacement connection.
+      if (this.ws === ws) this.parseServerMessage(text, onSetupComplete, onServerError);
+    };
     if (rawData instanceof Blob) {
-      rawData.text().then((text) => this.parseServerMessage(text));
+      rawData.text().then(parse).catch(() => {
+        if (this.ws === ws) onServerError('Failed to read Gemini server message');
+      });
     } else {
-      this.parseServerMessage(rawData);
+      parse(rawData);
     }
   }
 
-  private parseServerMessage(text: string): void {
+  private parseServerMessage(
+    text: string,
+    onSetupComplete: () => void,
+    onServerError: (message: string) => void,
+  ): void {
     try {
       const msg = JSON.parse(text);
 
-      // Setup complete acknowledgment
+      if (msg.error) {
+        onServerError(msg.error.message || 'Gemini server error');
+        return;
+      }
+
       if (msg.setupComplete) {
         console.log('[GeminiProvider] Setup complete');
-        this.setState('connected');
+        onSetupComplete();
         return;
       }
 
@@ -238,12 +297,12 @@ export class GeminiProvider extends BaseAIProvider {
               const float32 = this.pcm16ToFloat32(new Int16Array(pcmBytes));
               this.emitAudioOutput(float32);
             }
-            // Text transcript
-            if (part.text) {
-              console.log('[GeminiProvider] Transcript:', part.text);
-              this.emitTranscript(part.text, false);
-            }
           }
+        }
+
+        // Spoken text comes from output transcription; model parts may contain thoughts.
+        if (content.outputTranscription?.text) {
+          this.emitTranscript(content.outputTranscription.text, false);
         }
 
         // Turn complete
