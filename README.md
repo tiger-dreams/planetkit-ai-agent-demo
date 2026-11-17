@@ -1,6 +1,6 @@
 # PlanetKit AI Agent Demo
 
-A mobile-first LINE LIFF video conferencing application with **AI Agent** powered by Google Gemini 2.0 Live API or OpenAI Realtime API, built on **LINE PlanetKit Web SDK 5.6** with the official Virtual Background plugin.
+A mobile-first LINE LIFF video conferencing application with **AI Agent** powered by Google Gemini Live API or OpenAI Realtime API, built on **LINE PlanetKit Web SDK 6.0** with the official Virtual Background plugin.
 
 ## Human-to-human group calls (start here)
 
@@ -34,8 +34,8 @@ for the current comparison scope and checks.
 ## Features
 
 - **LINE LIFF Integration** - Seamless LINE authentication and in-app browser support
-- **PlanetKit Web SDK 5.6** - HD group video conferencing with WebRTC
-- **Virtual Background (Blur)** - One-tap on/off blur via `@line/planet-kit-virtual-background` 1.2.0. Works in WebView (5.6+). The processed canvas is overlaid onto the local self-tile so the user sees the blur effect on themselves as well as remote peers.
+- **PlanetKit Web SDK 6.0** - HD group video conferencing with WebRTC
+- **Virtual Background (Blur)** - One-tap on/off blur via `@line/planet-kit-virtual-background` 2.0.0. Uses the official SDK 6.0 / plugin 2.0 pairing and waits for model initialization before enabling blur. The processed canvas is overlaid onto the local self-tile so the user sees the blur effect on themselves as well as remote peers.
 - **Media Statistics Panel** - Live `getCurrentStats()` polling at 2s intervals. Displays the SDK's raw outbound/inbound × audio/video fields (packetsSent/Received, bytesSent/Received, packetsLost, jitter, fps, frameWidth/Height, fir/pli/nackCount, …) without any reinterpretation.
 - **AI Agent (Multi-Provider)** - Real-time AI assistant with support for:
   - **Google Gemini 2.0 Live API** - Default provider with 16kHz input audio
@@ -206,7 +206,7 @@ POST /join-as-agent
 
 ### `mediaHtmlElement` key — `myVideo` (not `localVideo`)
 
-The official [`ConferenceMediaHtmlElement`](https://docs.lineplanet.me/api-reference/client/web/5.6/global.html#ConferenceMediaHtmlElement) typedef defines `myVideo` and `roomAudio`. Using a non-spec key (e.g. `localVideo`) makes the SDK silently ignore it, leaving `srcObject` unset and forcing a fallback `getUserMedia()` in `evtConnected`. On Android LINE WebView this second `getUserMedia()` collides with the SDK's RTC tracks and can drop a peer who has just joined within ~1 second. This repo passes `myVideo` correctly.
+The official [`ConferenceMediaHtmlElement`](https://docs.lineplanet.me/api-reference/client/web/6.0/global.html#ConferenceMediaHtmlElement) typedef defines `myVideo` and `roomAudio`. Using a non-spec key (e.g. `localVideo`) makes the SDK silently ignore it, leaving `srcObject` unset and forcing a fallback `getUserMedia()` in `evtConnected`. On Android LINE WebView this second `getUserMedia()` collides with the SDK's RTC tracks and can drop a peer who has just joined within ~1 second. This repo passes `myVideo` correctly.
 
 ### Why Windows VM (not Linux)?
 
@@ -282,7 +282,7 @@ planetkit-ai-agent-demo/
 ## Tech Stack
 
 - **Frontend**: Vite + React 18 + TypeScript + Tailwind CSS + shadcn/ui
-- **Video SDK**: LINE PlanetKit Web SDK 5.6 + `@line/planet-kit-virtual-background` 1.2.0
+- **Video SDK**: LINE PlanetKit Web SDK 6.0 + `@line/planet-kit-virtual-background` 2.0.0
 - **AI Providers**:
   - Google Gemini 2.0 Live API (WebSocket, 16kHz input)
   - OpenAI Realtime API (WebSocket, 24kHz input, server-side VAD)

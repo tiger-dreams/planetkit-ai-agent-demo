@@ -58,19 +58,62 @@ test('SDK peer event replay deduplicates users, updates speaking, removes depart
     setAiAgentJoined() {}, setAiAgentMode() {}, setIsAIAgentInviter() {}, setAiAgentSessionUsed() {}, toast() {}, language: 'en',
   });
   const peers = handler('evtPeerListUpdated', context);
-  const doctor = { userId: 'doctor-001', displayName: 'Doctor' };
-  const nurse = { userId: 'nurse-001', displayName: 'Nurse' };
+  const doctor = { userId: 'doctor-001', displayName: 'Doctor', isMicMuted: true };
+  const nurse = { userId: 'nurse-001', displayName: 'Nurse', isMicMuted: false };
   peers({ addedPeers: [doctor], removedPeers: [], totalPeersCount: 1 });
   peers({ addedPeers: [doctor, nurse], removedPeers: [], totalPeersCount: 2 });
   assert.deepEqual(Array.from(participants, p => p.id), ['patient-001', 'doctor-001', 'nurse-001']);
   assert.equal(requestedVideos.length, 2);
   assert.equal(requestedVideos[0].userId, doctor.userId);
+  assert.equal(participants.find(p => p.id === doctor.userId).isAudioOn, false);
+  assert.equal(participants.find(p => p.id === nurse.userId).isAudioOn, true);
+  handler('evtPeersMicUnmuted', context)([doctor]);
+  handler('evtPeersMicMuted', context)([nurse]);
+  assert.equal(participants.find(p => p.id === doctor.userId).isAudioOn, true);
+  assert.equal(participants.find(p => p.id === nurse.userId).isAudioOn, false);
   handler('evtPeersTalkingStatusUpdated', context)({ active: [doctor.userId], inactive: [nurse.userId] });
   assert.equal(participants.find(p => p.id === doctor.userId).isSpeaking, true);
   assert.equal(participants.find(p => p.id === nurse.userId).isSpeaking, false);
   peers({ addedPeers: [], removedPeers: [doctor], totalPeersCount: 1 });
   assert.deepEqual(removedVideos, [doctor.userId]);
   assert.equal(participants.some(p => p.id === doctor.userId), false);
+});
+
+test('rejected peer video requests clear pending elements and allow another request', async () => {
+  let participants = [{ id: 'patient-001', isLocal: true }];
+  let rejectVideo;
+  let requests = 0;
+  const elements = new Map();
+  const context = vm.createContext({
+    console: { log() {}, warn() {} },
+    config: { userId: 'patient-001' }, isVideoOn: true, isAudioOn: true,
+    remoteVideoElementsRef: { current: elements }, localVideoRef: { current: {} },
+    planetKitConference: {
+      requestPeerVideo: () => {
+        requests++;
+        return requests === 1 ? new Promise((_, reject) => { rejectVideo = reject; }) : Promise.resolve();
+      },
+    },
+    document: { createElement: () => ({ style: {} }) },
+    setParticipants: update => { participants = update(participants); },
+    aiAgentJoinedRef: { current: false },
+    setAiAgentJoined() {}, setAiAgentMode() {}, setIsAIAgentInviter() {}, setAiAgentSessionUsed() {}, toast() {}, language: 'en',
+  });
+  const peers = handler('evtPeerListUpdated', context);
+  const event = { addedPeers: [{ userId: 'doctor-001', isMicMuted: false }], removedPeers: [] };
+  peers(event);
+  peers(event);
+  assert.equal(requests, 1, 'pending request must not be duplicated');
+  assert.equal(elements.size, 1);
+  rejectVideo(new Error('Video not available'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(elements.size, 0);
+  assert.equal(participants.find(p => p.id === 'doctor-001').videoElement, undefined);
+  peers(event);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(requests, 2);
+  assert.equal(elements.size, 1);
+  assert.equal(participants.find(p => p.id === 'doctor-001').videoElement, elements.get('doctor-001'));
 });
 
 test('SDK local-preview readiness does not drop a clinician who joined concurrently', async () => {

@@ -364,20 +364,33 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
               // Request video from PlanetKit
               if (planetKitConference && typeof planetKitConference.requestPeerVideo === 'function') {
+                // Reserve the element while the SDK request is pending to avoid duplicates.
+                remoteVideoElementsRef.current.set(peerId, videoElement);
+                const clearFailedRequest = (error: unknown) => {
+                  if (remoteVideoElementsRef.current.get(peerId) !== videoElement) return;
+                  remoteVideoElementsRef.current.delete(peerId);
+                  setParticipants(prev => prev.map(p => p.id === peerId
+                    ? { ...p, videoElement: undefined }
+                    : p));
+                  console.warn('[PlanetKit] Peer video request failed:', peerId, error);
+                };
                 try {
-                  planetKitConference.requestPeerVideo({
+                  Promise.resolve(planetKitConference.requestPeerVideo({
                     userId: peerId,
                     resolution: 'vga',
                     videoViewElement: videoElement
-                  });
-
-                  remoteVideoElementsRef.current.set(peerId, videoElement);
+                  })).then(() => {
+                    if (remoteVideoElementsRef.current.get(peerId) !== videoElement) return;
+                    setParticipants(prev => prev.map(p => p.id === peerId
+                      ? { ...p, videoElement }
+                      : p));
+                  }).catch(clearFailedRequest);
 
                   videoElement.onerror = () => {
                     // Ignore video errors
                   };
                 } catch (err) {
-                  // Ignore video request failures
+                  clearFailedRequest(err);
                 }
               }
             });
@@ -436,7 +449,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
                     id: peerId,
                     name: peerName,
                     isVideoOn: peer.videoState !== undefined ? peer.videoState === 'enabled' : true,
-                    isAudioOn: peer.audioState !== undefined ? peer.audioState === 'enabled' : true,
+                    isAudioOn: !peer.isMicMuted,
                     videoElement: videoElement
                   };
                 });
@@ -610,10 +623,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
         console.log('[PlanetKit] joinConference succeeded');
         setConference(planetKitConference);
 
-        // Register Virtual Background (5.6+ supports WebView). Toggled later.
-        // VB 1.2.0 build doesn't expose waitForVirtualBackgroundInitialization;
-        // per the README NOTE, startVirtualBackgroundBlur handles init internally,
-        // so calling it on demand is safe.
+        // WebPlanetKit 6.0 requires the 2.x virtual background plugin.
+        // Initialization is awaited when the user enables blur.
         try {
           const vb = new PlanetKitVirtualBackground();
           if (typeof planetKitConference.registerVirtualBackground === 'function') {
@@ -801,10 +812,11 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
           toast({ title: 'Blur canvas not ready', variant: 'destructive' });
           return;
         }
+        await virtualBackgroundRef.current.waitForVirtualBackgroundReady();
         // Even with mediaHtmlElement.myVideo set, some environments may leave the
         // SDK's internal videoElement unset — bind it explicitly at toggle time.
         if (typeof conference.changeVirtualBackgroundVideoElement === 'function' && localVideoRef.current) {
-          conference.changeVirtualBackgroundVideoElement(localVideoRef.current);
+          await conference.changeVirtualBackgroundVideoElement(localVideoRef.current);
         }
         await conference.startVirtualBackgroundBlur(canvas, 15);
         setIsBlurOn(true);

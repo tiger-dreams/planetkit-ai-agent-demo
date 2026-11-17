@@ -136,17 +136,25 @@ export const HeadlessAgentPage = () => {
       }
 
       // One-time: Inject AI audio stream into Conference
-      if (conferenceRef.current && !conferenceRef.current._aiStreamInjected) {
-        try {
-          const mixedStream = mediaStreamDestRef.current.stream;
-          if (typeof conferenceRef.current.setCustomMediaStream === 'function') {
-            conferenceRef.current.setCustomMediaStream(mixedStream);
-            conferenceRef.current._aiStreamInjected = true;
+      const conference = conferenceRef.current;
+      if (conference && !conference._aiStreamInjected && !conference._aiStreamInjectionPending
+        && typeof conference.setCustomMediaStream === 'function') {
+        const mixedStream = mediaStreamDestRef.current.stream;
+        // Audio chunks can arrive while PlanetKit is replacing the sender track.
+        // Keep one injection in flight and allow a later chunk to retry on failure.
+        conference._aiStreamInjectionPending = true;
+        void Promise.resolve()
+          .then(() => conference.setCustomMediaStream(mixedStream))
+          .then(() => {
+            conference._aiStreamInjected = true;
             console.log('[HeadlessAgent] ✅ AI audio stream injected into Conference');
-          }
-        } catch (err) {
-          console.warn('[HeadlessAgent] Could not inject AI stream:', err);
-        }
+          })
+          .catch((err) => {
+            console.warn('[HeadlessAgent] Could not inject AI stream:', err);
+          })
+          .finally(() => {
+            conference._aiStreamInjectionPending = false;
+          });
       }
 
       // Send audio chunk to AudioWorklet (ring buffer)
