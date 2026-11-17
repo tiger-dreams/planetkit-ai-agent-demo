@@ -1,104 +1,119 @@
 # System Architecture
 
+Reviewed against source on 2026-11-17. Runtime configuration is documented here;
+live deployment and end-to-end media quality require separate validation.
+
 ## Overview
 
-This document describes the architecture for the PlanetKit AI Agent Demo — a LINE LIFF video conferencing application with AI Agent (Gemini 3.8 Live) integration, Agent Call (1-to-1 outbound voice), and group conferencing.
+The demo uses Vercel for its React/LIFF frontend and serverless APIs, LINE
+PlanetKit Web SDK 6.0 for group calls, and Gemini 3.8 Live for AI voice.
+Human-to-human calls can run without an AI provider or browser agent service.
 
----
+## Runtime responsibilities
 
-## Technology Stack
+| Component | Responsibility |
+|-----------|----------------|
+| Client browser / LINE LIFF | User authentication, meeting UI, participant media and AI controls |
+| Vercel | Frontend including `/headless-agent`; `/api/ai-agent-session`, LINE API and PlanetKit callback |
+| Render browser service | Docker/Linux runtime; Xvfb, PulseAudio, Selenium and Chrome lifecycle |
+| LINE Planet | PlanetKit conference media and participant signaling |
+| Gemini 3.8 Live | AI audio input/output over WebSocket |
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Frontend | Vite + React 18 + TypeScript | SPA with mobile-first UI |
-| Styling | Tailwind CSS + shadcn/ui | Responsive component library |
-| Video SDK | LINE PlanetKit Web SDK 6.0 | WebRTC group conferencing |
-| AI | Google Gemini 3.8 Live API | Real-time voice AI agent |
-| Auth | LINE LIFF | In-app authentication |
-| Backend | Vercel Serverless Functions (6) | API endpoints |
-| Database | Vercel Postgres (Neon) | Event logging, session tracking |
-| AI Runtime | Puppeteer on Windows VM | Headless Chrome for AI Agent |
-| Scheduling | Upstash QStash | Delayed retry scheduling |
+## AI agent bridge
 
----
+The AI runs as a separate PlanetKit participant in Chrome on Render. Render
+runs a Docker/Linux service: `start-xvfb.sh` starts Xvfb and PulseAudio, then
+Supervisor starts `server-selenium.js`. Selenium launches Chrome with the virtual
+display; this implementation does not use Chrome's `--headless` mode. The route
+name `/headless-agent` describes the unattended agent page, not a Chrome flag.
 
-## Three Main Features
-
-### 1. Group Video Conference
-
-Simple client-side WebRTC connection — no backend state required.
-
-```
-User A ──WebRTC──► Planet Server ◄──WebRTC── User B
-                        │
-                   Room-based routing
-                   (same Room ID = same call)
-```
-
-**Key files:**
-- `src/pages/SetupPage.tsx` — Room selection, LIFF auth
-- `src/components/PlanetKitMeetingArea.tsx` — Conference logic (770+ lines)
-- `src/components/TileView.tsx` — Adaptive video grid
-- `src/utils/token-generator.ts` — Client-side JWT (demo only)
-
-### 2. AI Agent in Group Call (Bridge Architecture)
-
-AI Agent joins the conference as a separate participant via a headless Chrome instance on a Windows VM.
-
-```
-┌── Client Browser ──┐    ┌── Windows VM ────────────────────────┐
-│                     │    │                                      │
-│  PlanetKitMeeting  │    │  server-windows.js (Express :3000)   │
-│   [Invite AI Btn]──┼───►│    │                                 │
-│   [Listen/Respond]──┼───►│    ▼ puppeteer.launch()             │
-│                     │    │  Chrome (headless:false, off-screen) │
-│                     │    │    ┌─ HeadlessAgentPage ──────────┐ │
-│                     │    │    │ PlanetKit Conference (WebRTC) │ │
-│                     │    │    │ AudioWorklet → Gemini WS      │ │
-│                     │    │    │ Gemini response → PlanetKit   │ │
-│                     │    │    └───────────────────────────────┘ │
-└─────────────────────┘    └──────────────────────────────────────┘
-         │                              │
-         └──── Both connect to ────────►│
-                Planet Server (same room)
+```text
+Client browser (LINE LIFF)
+  ├─ WebRTC ↔ LINE Planet conference
+  └─ POST /join-as-agent → Render browser service (Docker / Linux)
+                             └─ Selenium → Chrome on Xvfb + PulseAudio
+                                  └─ Vercel /headless-agent
+                                       ├─ WebRTC ↔ same Planet conference
+                                       ├─ POST /api/ai-agent-session → Vercel
+                                       └─ WebSocket ↔ Gemini 3.8 Live
 ```
 
-**Audio Pipeline:**
-1. Room audio → `captureStream()` → AudioWorklet (PCM16, 16kHz)
-2. PCM16 chunks → Gemini WebSocket (`realtimeInput`)
-3. Gemini audio response → Float32 Ring Buffer → AudioContext (24kHz)
-4. AudioContext → `MediaStreamDestination` → `setCustomMediaStream()` → Room
+Vercel hosts the frontend and the session API. Render controls the browser
+lifecycle. PlanetKit carries conference media between participants; Gemini
+provides AI voice responses. The agent page bridges these two media paths.
 
-**Listen/Respond Mode (Dual Safety Net):**
-- **Gemini instruction**: `clientContent` message tells Gemini to stop/start speaking
-- **Audio output gate**: Code-level block prevents audio from reaching PlanetKit
-- Audio **input** continues in Listen mode to maintain conversational context
+1. The meeting sends `POST /join-as-agent` to the Render service.
+2. Render returns `202 Accepted` while browser startup continues in the background.
+3. Chrome loads `/headless-agent` from `FRONTEND_URL` and joins the PlanetKit room.
+4. The page requests provider configuration from Vercel `/api/ai-agent-session`.
+5. The page connects to Gemini 3.8 Live over WebSocket and bridges room audio.
 
-**Key files:**
-- `src/pages/HeadlessAgentPage.tsx` — Runs in Puppeteer on VM
-- `src/services/ai-agent-service.ts` — Gemini WebSocket client (643 lines)
-- `src/config/ai-agent-languages.ts` — Multi-language prompts & voices
-- `render-service/server-windows.js` — Puppeteer orchestration
-- `api/ai-agent-session.ts` — Gemini config endpoint
+A successful control response means the request was accepted. Confirm the AI
+participant through PlanetKit `evtPeerListUpdated` and verify two-way audio
+separately; HTTP success alone does not establish media readiness.
 
-**Why Windows VM?**
-Linux headless Chrome breaks Web Audio API (AudioWorklet fails silently). Windows with `headless: false` + `--window-position=-2000,0` (off-screen) keeps audio functional.
+**Audio pipeline (Gemini):** room audio → `captureStream()` → AudioWorklet →
+PCM16 at 16 kHz → Gemini WebSocket → 24 kHz response playback →
+`MediaStreamDestination` → `setCustomMediaStream()` → PlanetKit room.
+Listen mode gates AI output while continuing audio input for context.
 
----
+### Render implementation and repository scope
 
-## API Endpoints (Vercel Functions)
+This public repository includes the frontend/session API and the legacy
+`render-service/server-windows.js` Puppeteer alternative. It does **not** include
+the Selenium Docker runtime. Connect a compatible existing Render browser service,
+or use the [source project's Render implementation](https://github.com/tiger-dreams/viva-connect-test/tree/main/render-service)
+as a reference. Its `Dockerfile`, `render.yaml`, `start-xvfb.sh`,
+`supervisord.conf`, and `server-selenium.js` define the Render path described here.
+Do not deploy this repository's `render-service/` folder as though those files
+were included. Review the source service's dependencies and unrelated workloads
+before reusing it.
 
-| Endpoint | Methods | Description |
-|----------|---------|-------------|
-| `/api/ai-agent-session` | POST | Returns AI provider WebSocket config (Gemini or OpenAI) |
-| `/api/line` | GET, POST | `get-followers`, `get-token`, `send-invite` |
-| `/api/planetkit-callback` | GET, POST | PlanetKit group call event callback |
+The Windows script remains a legacy alternative; it is not the current Render
+setup. Linux is not generally unsupported: the source runtime uses visible Chrome
+on Xvfb with PulseAudio.
 
----
+## Configuration
 
-## Security Notes
+| Setting | Configure on | Purpose |
+|---------|--------------|---------|
+| `VITE_RENDER_SERVICE_URL` | Frontend build / Vercel | HTTPS URL of the Render browser service for meeting controls |
+| `FRONTEND_URL` | Render | Vercel origin used to load `/headless-agent` |
+| `GEMINI_API_KEY` | Vercel server environment | Read by `/api/ai-agent-session` for Gemini 3.8 Live configuration |
+| `OPENAI_API_KEY` | Vercel server environment, optional | Alternative provider configuration |
 
-1. **Token Generation** — Client-side JWT in this demo. **Production must use server-side generation.**
-2. **API Credentials** — Store in environment variables, never in code
-3. **LIFF Authentication** — Validated by LINE Platform
-4. **Callback URLs** — Register in PlanetKit Console for event delivery
+The current session API returns the Gemini API key to its browser caller. Keeping
+it in a Vercel environment variable does not make it server-only during a session.
+Review session access and credential handling before exposing this demo publicly.
+
+## Source map
+
+| Source | Role |
+|--------|------|
+| `src/components/PlanetKitMeetingArea.tsx` | Meeting controls and participant events |
+| `src/pages/HeadlessAgentPage.tsx` | Agent conference participant and media bridge |
+| `src/services/ai-agent-service.ts` | Provider orchestration and audio routing |
+| `src/services/providers/gemini-provider.ts` | Gemini WebSocket protocol |
+| `api/ai-agent-session.ts` | Vercel provider session configuration |
+| `render-service/server-windows.js` | Bundled legacy Windows alternative |
+
+See the [Render component diagram](architecture-ai-agent-windows-vm.puml).
+Its historical filename is retained for compatibility.
+
+## Vercel API endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/api/ai-agent-session` | Provider WebSocket configuration |
+| `/api/line` | LINE token, follower and invitation actions |
+| `/api/planetkit-callback` | PlanetKit group-call events |
+
+## Security and verification
+
+The demo generates PlanetKit JWTs in the client. Move token issuance and PlanetKit
+secrets to an application server for production. Vite variables are embedded in
+the frontend build; do not use a `VITE_` variable for provider API keys.
+
+Check the browser service's health, invite the AI, observe its PlanetKit peer,
+and verify media in both directions. A health check, session configuration
+response or accepted invitation does not demonstrate a working audio bridge.
