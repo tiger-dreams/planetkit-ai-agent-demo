@@ -1,3 +1,4 @@
+import type { Language } from '@/contexts/LanguageContext';
 import { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -18,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 interface ProfileDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  language: 'en' | 'ko';
+  language: Language;
 }
 
 export const ProfileDialog = ({ open, onOpenChange, language }: ProfileDialogProps) => {

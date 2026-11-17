@@ -121,15 +121,17 @@ export const TileView = ({ participants, maxVisibleTiles = 4, showVideoStats = f
 
         // Add new video element
         if (!videoContainer.contains(participant.videoElement)) {
+          participant.videoElement.style.position = 'static';
+          participant.videoElement.style.top = '';
+          participant.videoElement.style.left = '';
           participant.videoElement.style.width = '100%';
           participant.videoElement.style.height = '100%';
           participant.videoElement.style.objectFit = 'cover';
           participant.videoElement.style.borderRadius = '8px';
           // Apply CSS mirroring immediately for local participant (prevents flicker)
-          if (participant.isLocal) {
-            participant.videoElement.style.transform = 'scaleX(-1)';
-          }
+          participant.videoElement.style.transform = participant.isLocal ? 'scaleX(-1)' : '';
           videoContainer.appendChild(participant.videoElement);
+          participant.videoElement.play().catch(() => {});
         }
 
         // Show/hide the video element based on isVideoOn

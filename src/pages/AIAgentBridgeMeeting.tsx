@@ -93,32 +93,23 @@ export const AIAgentBridgeMeeting = () => {
     evtPeerListUpdated: (peerUpdateInfo: any) => {
       console.log('[AIAgentBridge] Peer list updated:', peerUpdateInfo);
 
-      if (conferenceRef.current) {
-        const peerList = conferenceRef.current.getPeerList();
-        const totalCount = 1 + (peerList?.length || 0); // 1 (local) + peers
-        setParticipantCount(totalCount);
+      setParticipantCount(1 + (peerUpdateInfo.totalPeersCount || 0));
 
-        // Check if AI Agent joined
-        const aiAgent = peerList?.find((peer: any) => peer.userId.includes('AI_HEADLESS_'));
-        if (aiAgent && !aiAgentJoined) {
-          console.log('[AIAgentBridge] ✅ AI Agent detected in room:', aiAgent.userId);
-          setAiAgentJoined(true);
-          toast({
-            title: 'AI Agent Joined',
-            description: 'AI is now in the room!',
-          });
-        }
+      // The delegate reports peers directly; Conference has no getPeerList().
+      const aiAgent = (peerUpdateInfo.addedPeers || []).find(
+        (peer: any) => peer.userId?.includes('AI_HEADLESS_')
+      );
+      if (aiAgent && !aiAgentJoined) {
+        console.log('[AIAgentBridge] ✅ AI Agent detected in room:', aiAgent.userId);
+        setAiAgentJoined(true);
+        toast({
+          title: 'AI Agent Joined',
+          description: 'AI is now in the room!',
+        });
       }
     },
 
-    evtError: (error: any) => {
-      console.error('[AIAgentBridge] Conference error:', error);
-      toast({
-        title: 'Conference Error',
-        description: error.message || 'Unknown error',
-        variant: 'destructive',
-      });
-    },
+    // Conference errors surface via join rejection or evtDisconnected.
   };
 
   // Join PlanetKit Conference as User A
@@ -145,7 +136,7 @@ export const AIAgentBridgeMeeting = () => {
     console.log('[AIAgentBridge] Room ID:', roomId);
 
     // Create Conference instance
-    conferenceRef.current = new PlanetKitEval.Conference();
+    conferenceRef.current = new PlanetKitEval.Conference({});
 
     const conferenceParams = {
       myId: userId,

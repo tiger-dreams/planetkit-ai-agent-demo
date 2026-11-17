@@ -34,6 +34,8 @@ import * as PlanetKitEval from "@line/planet-kit/dist/planet-kit-eval";
 import PlanetKitVirtualBackground from "@line/planet-kit-virtual-background";
 import { LANGUAGE_VOICE_MAP } from "@/config/ai-agent-languages";
 import type { AgentLanguage } from "@/config/ai-agent-languages";
+import { buildConferenceJoinParams } from "@/utils/planetkit-conference";
+import { useWakeLock } from "@/hooks/use-wake-lock";
 
 interface PlanetKitMeetingAreaProps {
   config: PlanetKitConfig;
@@ -51,6 +53,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     connected: false,
     connecting: false
   });
+  useWakeLock(connectionStatus.connected || connectionStatus.connecting);
   const [isAudioOn, setIsAudioOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -58,6 +61,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
   const [callDuration, setCallDuration] = useState<string>("00:00:00");
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [isInvitingAIAgent, setIsInvitingAIAgent] = useState(false);
+  const isInvitingAIAgentRef = useRef(false);
+  const aiAgentJoinedRef = useRef(false);
   const [isKickingAIAgent, setIsKickingAIAgent] = useState(false);
   const [aiAgentJoined, setAiAgentJoined] = useState(false);
   const [aiAgentSessionUsed, setAiAgentSessionUsed] = useState(false);
@@ -78,6 +83,20 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
   const remoteVideoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   // Prevent iOS WebKit double-tap events (ref-based guard, faster than React state)
   const isConnectingRef = useRef(false);
+  const connectionAttemptRef = useRef(0);
+
+  useEffect(() => () => {
+    connectionAttemptRef.current++;
+  }, []);
+
+  useEffect(() => {
+    const elements = [localVideoRef.current, audioElementRef.current].filter(Boolean);
+    const play = (event: Event) => {
+      (event.currentTarget as HTMLMediaElement).play().catch(() => {});
+    };
+    elements.forEach(element => element.addEventListener('loadedmetadata', play));
+    return () => elements.forEach(element => element.removeEventListener('loadedmetadata', play));
+  }, []);
 
   // Manage the blur canvas imperatively, outside the React tree.
   // If kept in JSX, reparenting it later breaks the original parent's
@@ -182,7 +201,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
     try { // ensure isConnectingRef.current = false in finally
 
-    if (!config.serviceId || !config.userId || !config.accessToken) {
+    if (!config.serviceId || !config.roomId || !config.userId || !config.accessToken) {
       toast({
         title: "Configuration Error",
         description: "PlanetKit configuration is invalid.",
@@ -194,6 +213,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     // Environment is now always 'eval' (set automatically)
     // No need to check for environment selection
 
+    const attemptId = ++connectionAttemptRef.current;
     setConnectionStatus({ connected: false, connecting: true });
 
     // The PlanetKit SDK manages media streams directly during joinConference
@@ -202,38 +222,41 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
     try {
       const attemptJoin = async (PlanetKitModule: any, envLabel: 'eval' | 'real') => {
         // Conference flow (Group Call)
-        const planetKitConference = new PlanetKitModule.Conference();
+        const planetKitConference = new PlanetKitModule.Conference({});
 
           const conferenceDelegate = {
             evtConnected: async () => {
+              if (connectionAttemptRef.current !== attemptId) return;
               setConnectionStatus({ connected: true, connecting: false });
               setConnectionStartTime(new Date());
 
-              // Acquire and display the local video stream (SDK only requests permission; we attach the stream ourselves)
+              // Reuse the SDK camera track; request a fallback only when none was attached.
               try {
-                const localStream = await navigator.mediaDevices.getUserMedia({
-                  video: true,
-                  audio: false  // Audio is managed by the SDK
-                });
-
-                if (localVideoRef.current) {
-                  localVideoRef.current.srcObject = localStream;
-                  await localVideoRef.current.play();
-                  console.log('[PlanetKit] Local video stream connected');
+                let localStream = localVideoRef.current?.srcObject as MediaStream | null;
+                if (!localStream || localStream.getVideoTracks().length === 0) {
+                  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                  if (connectionAttemptRef.current !== attemptId) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    return;
+                  }
+                  if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
                 }
+                await localVideoRef.current?.play();
               } catch (mediaError) {
-                console.warn('[PlanetKit] Could not get local video stream:', mediaError);
+                console.warn('[PlanetKit] Could not display local video stream:', mediaError);
               }
 
+              if (connectionAttemptRef.current !== attemptId) return;
+
               // Initialize only the local participant (existing peers are handled in evtPeerListUpdated)
-              setParticipants([{
+              setParticipants(prev => [{
                 id: config.userId,
                 name: config.displayName || config.userId,
                 isVideoOn: true,
                 isAudioOn: true,
                 videoElement: localVideoRef.current || undefined,
                 isLocal: true
-              }]);
+              }, ...prev.filter(participant => participant.id !== config.userId)]);
 
               console.log('[PlanetKit] evtConnected - local participant set, waiting for evtPeerListUpdated for existing peers');
 
@@ -246,6 +269,8 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             },
 
             evtDisconnected: (disconnectDetails: any) => {
+              if (connectionAttemptRef.current !== attemptId) return;
+              connectionAttemptRef.current++;
               // Clean up local media streams (turn off camera/mic)
               if (localVideoRef.current && localVideoRef.current.srcObject) {
                 const stream = localVideoRef.current.srcObject as MediaStream;
@@ -262,6 +287,13 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               setParticipants([]);
               setConnectionStartTime(null);
               setCallDuration("00:00:00");
+              aiAgentJoinedRef.current = false;
+              isInvitingAIAgentRef.current = false;
+              setAiAgentJoined(false);
+              setIsInvitingAIAgent(false);
+              setIsAIAgentInviter(false);
+              setAiAgentSessionUsed(false);
+              setAiAgentMode('respond');
 
               toast({
                 title: "연결 해제",
@@ -284,12 +316,12 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
             // Handle removed peers
             removedPeers.forEach((peer: any) => {
-              const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
+              const peerId = peer.userId;
 
               // Request PlanetKit to remove the peer's video
               if (planetKitConference && typeof planetKitConference.removePeerVideo === 'function') {
                 try {
-                  planetKitConference.removePeerVideo({ peerId: peerId });
+                  planetKitConference.removePeerVideo(peerId);
                 } catch (err) {
                   // Ignore video removal failures
                 }
@@ -312,7 +344,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
             // Request video for newly added peers
             addedPeers.forEach((peer: any) => {
-              const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
+              const peerId = peer.userId;
 
               // Skip peers we've already requested video for (avoids duplicate requests)
               if (remoteVideoElementsRef.current.has(peerId)) {
@@ -352,10 +384,11 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
             // Detect AI Agent leaving
             const removedAIAgent = removedPeers.find((peer: any) => {
-              const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
+              const peerId = peer.userId;
               return peerId && peerId.includes('AI_HEADLESS_');
             });
             if (removedAIAgent) {
+              aiAgentJoinedRef.current = false;
               setAiAgentJoined(false);
               setAiAgentMode('respond');
               setIsAIAgentInviter(false);
@@ -366,7 +399,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               // Remove participants that have been removed from the existing list
               let updated = prev.filter(p => {
                 const isRemoved = removedPeers.some((removedPeer: any) => {
-                  const removedPeerId = removedPeer.userId || removedPeer.peerId || removedPeer.id || removedPeer.myId;
+                  const removedPeerId = removedPeer.userId;
                   return removedPeerId === p.id;
                 });
                 return !isRemoved;
@@ -390,13 +423,13 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
               // Add newly added participants (excluding existing peers)
               const newParticipants = addedPeers
                 .filter((peer: any) => {
-                  const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
+                  const peerId = peer.userId;
                   return !existingRemotePeerIds.has(peerId);
                 })
                 .map((peer: any, index: number) => {
-                  const peerId = peer.userId || peer.peerId || peer.id || peer.myId || `peer-${index}`;
+                  const peerId = peer.userId || `peer-${index}`;
                   // Try various displayName field names (may differ across PlanetKit SDK versions)
-                  const peerName = peer.displayName || peer.peerDisplayName || peer.name || peer.peerName || peer.userId || `User ${index}`;
+                  const peerName = peer.displayName || peer.userId || `User ${index}`;
                   const videoElement = remoteVideoElementsRef.current.get(peerId);
 
                   return {
@@ -413,12 +446,13 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
             // Detect AI Agent joining
             const aiAgent = addedPeers.find((peer: any) => {
-              const peerId = peer.userId || peer.peerId || peer.id || peer.myId;
+              const peerId = peer.userId;
               return peerId && peerId.includes('AI_HEADLESS_');
             });
 
-            if (aiAgent && !aiAgentJoined) {
-              const aiPeerId = aiAgent.userId || aiAgent.peerId || aiAgent.id || aiAgent.myId;
+            if (aiAgent && !aiAgentJoinedRef.current) {
+              aiAgentJoinedRef.current = true;
+              const aiPeerId = aiAgent.userId;
               console.log('[AI Agent] ✅ AI Agent detected in room:', aiPeerId);
               setAiAgentJoined(true);
               toast({
@@ -433,7 +467,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
             updates.forEach((update: any) => {
               const peer = update.peer || {};
-              const peerId = peer.userId || peer.peerId || peer.id;
+              const peerId = peer.userId;
               const videoStatus = update.videoStatus || {};
 
               setParticipants(prev => prev.map(p => {
@@ -456,7 +490,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             peers.forEach((peerInfo: any) => {
               // evtPeersVideoPaused structure: {peer: {userId, ...}, pauseReason: ...}
               const peer = peerInfo.peer || peerInfo;
-              const peerId = peer.userId || peer.peerId || peer.id;
+              const peerId = peer.userId;
               console.log('[REMOTE VIDEO] Peer video paused, peerId:', peerId);
 
               setParticipants(prev => {
@@ -479,7 +513,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             const peers = Array.isArray(peerInfoArray) ? peerInfoArray : [peerInfoArray];
 
             peers.forEach((peerInfo: any) => {
-              const peerId = peerInfo.userId || peerInfo.peerId || peerInfo.id;
+              const peerId = peerInfo.userId;
               console.log('[REMOTE VIDEO] Peer video resumed, peerId:', peerId);
 
               setParticipants(prev => {
@@ -501,7 +535,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             const peers = Array.isArray(peerInfoArray) ? peerInfoArray : [peerInfoArray];
 
             peers.forEach((peerInfo: any) => {
-              const peerId = peerInfo.userId || peerInfo.peerId || peerInfo.id;
+              const peerId = peerInfo.userId;
 
               setParticipants(prev => prev.map(p => {
                 if (p.id === peerId) {
@@ -517,7 +551,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
             const peers = Array.isArray(peerInfoArray) ? peerInfoArray : [peerInfoArray];
 
             peers.forEach((peerInfo: any) => {
-              const peerId = peerInfo.userId || peerInfo.peerId || peerInfo.id;
+              const peerId = peerInfo.userId;
 
               setParticipants(prev => prev.map(p => {
                 if (p.id === peerId) {
@@ -540,42 +574,29 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
           },
 
           // Talking status update event for remote participants (Issue #10: Speaking indicator)
-          evtPeersTalkingStatusUpdated: (talkingInfoArray: any) => {
-            const talkingPeers = Array.isArray(talkingInfoArray) ? talkingInfoArray : [talkingInfoArray];
-
-
-            talkingPeers.forEach((talkingInfo: any) => {
-              // PlanetKit sends {active: [...], inactive: [...]} structure
-              const activeUsers = talkingInfo.active || [];
-              const inactiveUsers = talkingInfo.inactive || [];
-
-              setParticipants(prev => prev.map(p => {
-                // Check if user is in active or inactive list
+          evtPeersTalkingStatusUpdated: (talkingInfo: { active: string[]; inactive: string[] }) => {
+            const activeUsers = talkingInfo?.active || [];
+            const inactiveUsers = talkingInfo?.inactive || [];
+            setParticipants(prev => prev.map(p => {
+              if (activeUsers.includes(p.id) || inactiveUsers.includes(p.id)) {
                 const isTalking = activeUsers.includes(p.id);
-                const isInactive = inactiveUsers.includes(p.id);
-
-                if (isTalking || isInactive) {
-                  // Update both isTalking and isSpeaking for TileView compatibility
-                  return { ...p, isTalking, isSpeaking: isTalking };
-                }
-                return p;
-              }));
-            });
+                return { ...p, isTalking, isSpeaking: isTalking };
+              }
+              return p;
+            }));
           }
         };
 
-        const conferenceParams = {
-          myId: config.userId,
-          displayName: config.displayName || config.userId,
-          myServiceId: config.serviceId,
+        const conferenceParams = buildConferenceJoinParams({
+          userId: config.userId,
+          displayName: config.displayName,
+          serviceId: config.serviceId,
           roomId: config.roomId,
-          roomServiceId: config.serviceId,
           accessToken: config.accessToken,
-          mediaType: "video",
-          mediaHtmlElement: { roomAudio: audioElementRef.current, myVideo: localVideoRef.current },
+          roomAudio: audioElementRef.current,
+          myVideo: localVideoRef.current,
           delegate: conferenceDelegate,
-          enableTalkingStatusEvent: true // Enable speaking indicator events
-        };
+        });
 
         console.log('[PlanetKit] Calling joinConference with params:', {
           myId: conferenceParams.myId,
@@ -647,6 +668,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
   // Disconnect from Conference
   const disconnect = async () => {
+    connectionAttemptRef.current++;
     try {
       // Clean up local media streams (turn off camera/mic)
       if (localVideoRef.current && localVideoRef.current.srcObject) {
@@ -675,6 +697,13 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
       setParticipants([]);
       setConnectionStartTime(null);
       setCallDuration("00:00:00");
+      aiAgentJoinedRef.current = false;
+      isInvitingAIAgentRef.current = false;
+      setAiAgentJoined(false);
+      setIsInvitingAIAgent(false);
+      setIsAIAgentInviter(false);
+      setAiAgentSessionUsed(false);
+      setAiAgentMode('respond');
 
       toast({
         title: t.callEndedTitle,
@@ -814,6 +843,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
 
   // AI Agent invite handler
   const inviteAIAgent = async () => {
+    if (isInvitingAIAgentRef.current || aiAgentJoinedRef.current) return;
     if (!config.roomId) {
       toast({
         title: language === 'ko' ? 'AI Agent 초대 실패' : 'Failed to Invite AI Agent',
@@ -823,6 +853,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
       return;
     }
 
+    isInvitingAIAgentRef.current = true;
     setIsInvitingAIAgent(true);
 
     try {
@@ -877,6 +908,7 @@ export const PlanetKitMeetingArea = ({ config, onDisconnect }: PlanetKitMeetingA
         variant: 'destructive',
       });
     } finally {
+      isInvitingAIAgentRef.current = false;
       setIsInvitingAIAgent(false);
     }
   };

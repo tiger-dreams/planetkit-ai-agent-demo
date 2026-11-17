@@ -196,7 +196,7 @@ export const HeadlessAgentPage = () => {
     );
 
     // Initialize Conference
-    const conference = new PlanetKitEval.Conference();
+    const conference = new PlanetKitEval.Conference({});
     conferenceRef.current = conference;
 
     const conferenceDelegate = {
@@ -268,15 +268,15 @@ export const HeadlessAgentPage = () => {
       },
 
       evtPeerListUpdated: (peerUpdateInfo: any) => {
-        const added = peerUpdateInfo.addedPeers || peerUpdateInfo.added || [];
-        const removed = peerUpdateInfo.removedPeers || peerUpdateInfo.removed || [];
+        const added = peerUpdateInfo.addedPeers || [];
+        const removed = peerUpdateInfo.removedPeers || [];
 
         added.forEach((peer: any) => {
-          const id = peer.userId || peer.peerId || peer.id;
+          const id = peer.userId;
           if (id) peersRef.current.add(id);
         });
         removed.forEach((peer: any) => {
-          const id = peer.userId || peer.peerId || peer.id;
+          const id = peer.userId;
           if (id) peersRef.current.delete(id);
         });
 
@@ -299,9 +299,7 @@ export const HeadlessAgentPage = () => {
         }
       },
 
-      evtError: (error: any) => {
-        console.error('[HeadlessAgent] Conference error:', error);
-      },
+      // Conference errors surface via join rejection or evtDisconnected.
     };
 
     const conferenceParams = {

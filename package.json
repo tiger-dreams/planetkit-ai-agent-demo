@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "test:group": "node --test scripts/verify-group-call.mjs"
   },
   "dependencies": {
     "@line/liff": "^2.27.3",

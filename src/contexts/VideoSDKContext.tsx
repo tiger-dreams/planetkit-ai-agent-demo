@@ -1,11 +1,11 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, Dispatch, SetStateAction } from 'react';
 import { SDKType, AIProvider, PlanetKitConfig, CustomPlanetKitCredentials, FeatureAvailability } from '@/types/video-sdk';
 
 interface VideoSDKContextType {
   selectedSDK: SDKType;
   setSelectedSDK: (sdk: SDKType) => void;
   planetKitConfig: PlanetKitConfig;
-  setPlanetKitConfig: (config: PlanetKitConfig) => void;
+  setPlanetKitConfig: Dispatch<SetStateAction<PlanetKitConfig>>;
   isConfigured: boolean;
   customCredentials: CustomPlanetKitCredentials;
   setCustomCredentials: (credentials: CustomPlanetKitCredentials) => void;

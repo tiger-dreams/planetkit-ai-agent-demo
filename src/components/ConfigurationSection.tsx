@@ -1,9 +1,10 @@
+import type { Language } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Settings, Server, CheckCircle, XCircle } from 'lucide-react';
 import { useVideoSDK } from '@/contexts/VideoSDKContext';
 
 interface ConfigurationSectionProps {
-  language: 'en' | 'ko';
+  language: Language;
 }
 
 export const ConfigurationSection = ({ language }: ConfigurationSectionProps) => {

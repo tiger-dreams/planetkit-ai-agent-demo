@@ -2,6 +2,35 @@
 
 A mobile-first LINE LIFF video conferencing application with **AI Agent** powered by Google Gemini 2.0 Live API or OpenAI Realtime API, built on **LINE PlanetKit Web SDK 5.6** with the official Virtual Background plugin.
 
+## Human-to-human group calls (start here)
+
+The standard `/setup` → `/planetkit_meeting` flow uses PlanetKit Conference for
+human-to-human audio/video calls. Two participants can use it without inviting
+an AI agent. AI provider keys and the Windows agent service are only needed for
+AI features, not for ordinary group calls.
+
+For a two-person consultation demo:
+
+1. Configure the same Evaluation service, credentials and LIFF app on your deployment.
+2. Sign in with two **different LINE accounts**, one for each participant.
+3. Open `/setup?room=consultation-demo` on each participant's device (or share the
+   LIFF invitation for that room). Join the room, then use the meeting's Connect button.
+4. Confirm both participants appear, hear each other and can mute/unmute, turn
+   cameras off/on, leave and rejoin. Up to four participant tiles are shown.
+
+The setup page currently requires LINE login **for both participants**, including
+when opened in an external browser. A separate clinician application with its
+own authentication is not included. To build that experience, implement the
+clinician's authentication and issue that user's PlanetKit token on your server;
+join the same service, environment and room with a distinct user ID. Room IDs
+alone do not provide patient authorization or room access control.
+
+This is an unofficial integration demo, not a completed telemedicine system.
+Appointment scheduling, patient/clinician roles and medical-data controls are
+application responsibilities. Screen sharing and file transfer are not
+implemented in this sample. See [sync and validation notes](docs/SYNC_STATUS.md)
+for the current comparison scope and checks.
+
 ## Features
 
 - **LINE LIFF Integration** - Seamless LINE authentication and in-app browser support
@@ -77,11 +106,11 @@ Before getting started, you need:
 3. **LINE Planet Console Account** - For PlanetKit video/audio SDK
    - Obtain: Service ID, API Key, API Secret
    - Register callback URLs for event notifications
-4. **AI Provider API Key** - For AI Agent (at least one required):
+4. **AI Provider API Key** - Optional; only for AI Agent features:
    - **Gemini**: Get API key at https://aistudio.google.com
    - **OpenAI**: Get API key at https://platform.openai.com/api-keys (requires Realtime API access)
 5. **Vercel Account** (Free Hobby plan works) - Frontend + serverless API deployment
-6. **Windows VM** (Azure or similar) - AI Agent service (requires Chrome browser installed)
+6. **Windows VM** (Azure or similar) - Optional; only for the AI Agent service (requires Chrome browser installed)
 
 ## Step-by-Step Setup Guide
 
@@ -108,7 +137,7 @@ npm run dev             # Starts on localhost:8080
 1. Access LINE Planet Console
 2. Create a Service and obtain Service ID, API Key, API Secret
 3. Set `VITE_PLANETKIT_EVAL_*` values in your `.env`
-4. Test basic video conferencing locally (access via browser without LIFF)
+4. Test basic video conferencing with two different LINE logins (the current setup requires LIFF authentication)
 
 ### Phase 4: Vercel Deployment
 
@@ -124,7 +153,7 @@ Register callback URLs in PlanetKit Console:
 
 Update LIFF Endpoint URL in LINE Developers Console to your Vercel domain.
 
-### Phase 6: AI Agent Setup (Windows VM)
+### Phase 6: Optional AI Agent Setup (Windows VM)
 
 1. Provision a Windows VM (Azure recommended) and install Chrome browser
 2. Install Node.js (v18+)
